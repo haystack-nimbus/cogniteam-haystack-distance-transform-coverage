@@ -1,0 +1,183 @@
+{
+  "name": "nimbus/cogniteam-mce",
+  "category": "Algorithms/Exploration",
+  "type": "COMPONENT_TYPE_COMPONENT",
+  "className": "Ros1Component",  
+  "description": "Cogniteam distance transform coverage-exploration\nLicense: BSD\ngit: https://github.com/cognimbus/nimbus.library/tree/master/Library/Components/cogniteam-exploration",
+  "environment": {
+    "name": "",
+    "ipAddress": "",
+    "dockerInfo": {
+     
+      "image": "cognimbus/cogniteam-mce:latest",
+      "commands": [
+        "roslaunch",
+        "map_coverage",
+        "map_coverage_exploration.launch",
+        "algo_rate_hz_rate:=${algo_rate_hz_rate}",
+        "distance_between_goals_m:=${distance_between_goals_m}",
+        "map_dilation_level_m:=${map_dilation_level_m}",      
+        "--screen"
+      ]    
+    }
+  },
+  "parameters": {
+    "parameters": [      
+      {
+        "name": "algo_rate_hz_rate",
+        "limits": {},
+        "doubleValue": 15.0
+      },
+      {
+        "name": "distance_between_goals_m",
+        "limits": {},
+        "doubleValue": 0.5
+      },      
+      {
+        "name": "map_dilation_level_m",
+        "limits": {},
+        "doubleValue": "1.0"
+      }    
+    ]
+  },  
+  "streams": {
+    "inputStreams": [      
+      {
+        "name": "map",
+        "type": "",
+        "rosTopic": {
+          "topic": "/map",
+          "type": "Messages.nav_msgs.OccupancyGrid"
+        }
+      },
+      {
+        "name": "map_base_link",
+        "type": "Messages.geometry_msgs.Pose",
+        "rosTf": {
+          "baseFrame": "map",
+          "childFrame": "base_link",
+          "rate": 10
+        }
+      },
+      {
+        "name": "move_base_feedback",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/feedback",
+          "type": "Messages.move_base_msgs.MoveBaseActionFeedback"
+        }
+      },
+      {
+        "name": "move_base_result",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/result",
+          "type": "Messages.move_base_msgs.MoveBaseActionResult"
+        }
+      },
+      {
+        "name": "move_base_status",
+        "type": "",
+        "rosTopic": {
+          "topic": "/move_base/status",
+          "type": "Messages.actionlib_msgs.GoalStatusArray"
+        }
+      }
+    ],
+    "outputStreams": [
+      {
+        "name": "move_base_cancel",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/cancel",
+          "type": "Messages.actionlib_msgs.GoalID"
+        }
+      },      
+      {
+        "name": "move_base_goal",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/goal",
+          "type": "Messages.move_base_msgs.MoveBaseActionGoal"
+        }
+      },      
+      {
+        "name": "global_start",
+        "type": "",
+        "rosTopic": {
+          "topic": "/global_start",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "start_coverage",
+        "type": "",
+        "rosTopic": {
+          "topic": "/start_coverage",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "goal_coverage",
+        "type": "",
+        "rosTopic": {
+          "topic": "/goal_coverage",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "start_a_star",
+        "type": "",
+        "rosTopic": {
+          "topic": "/start_a_star",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "goal_a_star",
+        "type": "",
+        "rosTopic": {
+          "topic": "/goal_a_star",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "edges_frontiers_marker_arr",
+        "type": "",
+        "rosTopic": {
+          "topic": "/edges_frontiers_marker_arr",
+          "type": "Messages.visualization_msgs.MarkerArray"
+        }
+      },
+      {
+        "name": "coverage_path",
+        "type": "",
+        "rosTopic": {
+          "topic": "/coverage_path",
+          "type": "Messages.nav_msgs.Path"
+        }
+      },
+      {
+        "name": "current_coverage_waypoints",
+        "type": "",
+        "rosTopic": {
+          "topic": "/coverage_waypoints_marker_array",
+          "type": "Messages.visualization_msgs.MarkerArray"
+        }
+      },
+      {
+        "name": "a_star_path",
+        "type": "",
+        "rosTopic": {
+          "topic": "/a_star_path",
+          "type": "Messages.nav_msgs.Path"
+        }
+      }      
+    ]
+  },
+  "ros": {
+    "base_frame": "base_link",
+    "rate": 10.0,
+    "publishTfDevices": true
+  }
+}

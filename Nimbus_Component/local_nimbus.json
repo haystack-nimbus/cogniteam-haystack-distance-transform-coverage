@@ -1,0 +1,208 @@
+{
+  "name": "nimbus/laptop-local-distance-transform-map-covergae",
+  "category": "Algorithms/Exploration",
+  "type": "COMPONENT_TYPE_COMPONENT",
+  "className": "Ros1Component",
+  "description": "Intel Realsense D435 driver\nLicense: Apache 2.0",  
+  "environment": {    
+    "rosLocalInfo": {
+      "packageName": "map_coverage",
+      "launchFile": "map_coverage_exploration.launch",
+      "rosVersion": "",
+      "dependencies": [],
+      "workspaceSetup": "/home/yakir/distance_transform_coverage_ws/devel/setup.bash",
+      "required": true      
+    }
+  },
+  "parameters": {    
+  },  
+  "streams": {
+    "inputStreams": [      
+      {
+        "name": "scan",
+        "description": "Laser scans to create the map from",
+        "ros_topic": {
+          "topic": "base_scan",
+          "type": "Messages.sensor_msgs.LaserScan"
+        }
+      },
+      {
+        "name": "odom",
+        "type": "Nimbus.Core.Messages.Ros1.Messages.nav_msgs.Odometry",
+        "description": "The frame attached to the odometry system.",
+        "ros_tf": {
+          "base_frame": "odom",
+          "child_frame": "base_link",
+          "rate": 10.0
+        }
+      },     
+      {
+        "name": "move_base_feedback",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/feedback",
+          "type": "Messages.move_base_msgs.MoveBaseActionFeedback"
+        }
+      },
+      {
+        "name": "move_base_result",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/result",
+          "type": "Messages.move_base_msgs.MoveBaseActionResult"
+        }
+      },
+      {
+        "name": "move_base_status",
+        "type": "",
+        "rosTopic": {
+          "topic": "/move_base/status",
+          "type": "Messages.actionlib_msgs.GoalStatusArray"
+        }
+      },
+      {
+        "name": "local_cost_map",
+        "type": "",
+        "description": "The values in the local costmap.",
+        "streamMode": "STREAM_MODE_TOPIC",
+        "rosTopic": {
+          "topic": "/move_base/local_costmap/costmap",
+          "type": "Messages.nav_msgs.OccupancyGrid"
+        }
+      },     
+      {
+        "name": "global_cost_map",
+        "type": "",
+        "description": "The values in the global costmap.",
+        "streamMode": "STREAM_MODE_TOPIC",
+        "rosTopic": {
+          "topic": "/move_base/global_costmap/costmap",
+          "type": "Messages.nav_msgs.OccupancyGrid"
+        }
+      }    
+    ],
+    "outputStreams": [
+      {
+        "name": "move_base_cancel",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/cancel",
+          "type": "Messages.actionlib_msgs.GoalID"
+        }
+      },      
+      {
+        "name": "move_base_goal",
+        "type": "",
+        "ros_topic": {
+          "topic": "/move_base/goal",
+          "type": "Messages.move_base_msgs.MoveBaseActionGoal"
+        }
+      },      
+      {
+        "name": "global_start",
+        "type": "",
+        "rosTopic": {
+          "topic": "/global_start",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "start_coverage",
+        "type": "",
+        "rosTopic": {
+          "topic": "/start_coverage",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "goal_coverage",
+        "type": "",
+        "rosTopic": {
+          "topic": "/goal_coverage",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "start_a_star",
+        "type": "",
+        "rosTopic": {
+          "topic": "/start_a_star",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "goal_a_star",
+        "type": "",
+        "rosTopic": {
+          "topic": "/goal_a_star",
+          "type": "Messages.visualization_msgs.Marker"
+        }
+      },
+      {
+        "name": "edges_frontiers_marker_arr",
+        "type": "",
+        "rosTopic": {
+          "topic": "/edges_frontiers_marker_arr",
+          "type": "Messages.visualization_msgs.MarkerArray"
+        }
+      },
+      {
+        "name": "coverage_path",
+        "type": "",
+        "rosTopic": {
+          "topic": "/coverage_path",
+          "type": "Messages.nav_msgs.Path"
+        }
+      },
+      {
+        "name": "current_coverage_waypoints",
+        "type": "",
+        "rosTopic": {
+          "topic": "/coverage_waypoints_marker_array",
+          "type": "Messages.visualization_msgs.MarkerArray"
+        }
+      },
+      {
+        "name": "a_star_path",
+        "type": "",
+        "rosTopic": {
+          "topic": "/a_star_path",
+          "type": "Messages.nav_msgs.Path"
+        }
+      },
+      {
+        "name": "map",
+        "description": "Get the map data from this topic, which is latched, and updated periodically.",
+        "ros_topic": {
+          "topic": "/map",
+          "type": "Messages.nav_msgs.OccupancyGrid"
+        }
+      },
+      {
+        "name": "robot_pose",
+        "type": "Messages.geometry_msgs.Pose",
+        "description": "TF map to baselink as odometry",
+        "ros_tf": {
+          "base_frame": "map",
+          "child_frame": "base_link",
+          "rate": 10.0
+        }
+      }, 
+      {
+        "name": "map_odom",
+        "type": "Nimbus.Core.Messages.Ros1.Messages.nav_msgs.Odometry",
+        "description": "TF map to odom as odometry",
+        "ros_tf": {
+          "base_frame": "map",
+          "child_frame": "odom",
+          "rate": 10.0
+        }
+      }      
+    ]
+  },
+  "ros": {
+    "base_frame": "base_link",
+    "rate": 10.0,
+    "publishTfDevices": true
+  }
+}
