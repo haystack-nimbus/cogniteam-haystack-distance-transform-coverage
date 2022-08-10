@@ -35,6 +35,7 @@
 //  */
 
 #include <ros/ros.h>
+#include <signal.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <nav_msgs/OccupancyGrid.h>
@@ -90,6 +91,10 @@ using namespace std;
 geometry_msgs::PoseStamped startingLocation_;
 string startingTime_;
 
+bool exit_ = false;
+
+
+    
 
 string getCurrentTime(){ 
 
@@ -106,7 +111,6 @@ string getCurrentTime(){
     std::replace( curr_time_Str.begin(), curr_time_Str.end(), '/', '_');
     std::replace( curr_time_Str.begin(), curr_time_Str.end(), '-', '_');
 
-    cerr<<curr_time_Str<<endl;
 
     return curr_time_Str;    
 }
@@ -162,30 +166,25 @@ public:
         // cerr<<" wait for move-base server "<<endl;
         moveBaseController_.waitForServer(ros::Duration(10.0));
         ros::Duration(1).sleep();
-        cerr << " connect to move-base !! " << endl;
+        cerr << " exploration is now connecting with move-base !! " << endl;
 
         // rosparam
         ros::NodeHandle nodePrivate("~");
         nodePrivate.param("distance_between_goals_m", distBetweenGoalsM_, 0.5);
         nodePrivate.param("robot_raduis", robot_radius_meters_, 0.3);
-        nodePrivate.param("exploration_score", nim_map_score_to_finish_exploration_, 70.0);
+        nodePrivate.param("wanted_coverage_score", wanted_coverage_score_, 0.95);
         nodePrivate.param("duration_wait_for_move_base_response", duration_wait_for_move_base_response_, 15.0);
         nodePrivate.param<string>("coverage_image_path", coverage_img_path_, string(""));  
         nodePrivate.param<string>("base_frame", baseFrame_, string("base_link"));  
         nodePrivate.param<string>("global_frame", globalFrame_, string("map"));  
 
-        nodePrivate.param("/coverage/percentage", percentCoverage_, 0.0);    
-        nodePrivate.param("/coverage/state", state_, string("INITIALIZING"));
-        nodePrivate.param("/coverage/image_name", image_name_, string(""));  
-
-
-
-        cerr<<"base_frame "<<baseFrame_<<endl;
-
-        cerr<<"coverage_img_path_ "<<coverage_img_path_<<endl;
-
+        nodePrivate.param("reducing_goals", reducing_goals_, true);
 
         
+
+        nodePrivate.param("/coverage/percentage", percentCoverage_, 0.0);    
+        nodePrivate.param("/coverage/state", state_, string("INITIALIZING"));
+        nodePrivate.param("/coverage/image_name", image_name_, string(""));        
        
 
         // subs
@@ -228,13 +227,29 @@ public:
 
         startingCoverageTime_ = high_resolution_clock::now();
 
+    }
 
+    ~MapCoverageManager() {
+
+
+        moveBaseController_.cancelNavigation();
+        ros::Duration(1).sleep();
+
+        cerr<<"MapCoverageManager distructor "<<endl;
+        saveCoverageImg();
+
+        ros::shutdown();
 
     }
 
-    ~MapCoverageManager() {}
+    static void mySigintHandler(int sig, void *ptr)
+    {   
 
-    
+        cerr<<" user pressed CTRL+C "<<endl;
+        exit_ = true;
+
+
+    } 
 
     Mat occupancyGridMatToGrayScale(const Mat &map)
     {
@@ -352,7 +367,7 @@ public:
         robotMarker.color.r = 0.2;
         robotMarker.color.g = 0.8;
         robotMarker.color.b = 1.0;
-        robotMarker.lifetime = ros::Duration(200);
+        robotMarker.lifetime = ros::Duration(2000);
 
        safest_goal_marker_pub_.publish(robotMarker);
     }
@@ -515,6 +530,8 @@ public:
             tfListener_.lookupTransform(globalFrame_, baseFrame_,
                                         ros::Time(0), transform);
 
+            robotPose_.header.frame_id = globalFrame_;
+            robotPose_.header.stamp = ros::Time::now();
             robotPose_.pose.position.x = transform.getOrigin().x();
             robotPose_.pose.position.y = transform.getOrigin().y();
             robotPose_.pose.position.z = 0;
@@ -739,13 +756,20 @@ public:
             }
             else
             {
+                if(  reducing_goals_) {
 
-                if (angle != prevAngle)
-                {
+                    if (angle != prevAngle)
+                    {
 
-                    prevAngle = angle;
+                        prevAngle = angle;
+                        posesPath.push_back(pose);
+                    }
+                } else {
+
                     posesPath.push_back(pose);
+
                 }
+                
             }
         }
 
@@ -992,7 +1016,13 @@ public:
         while (ros::ok())
         {
             ros::spinOnce();
-           
+
+
+            if (exit_){
+
+                return false;
+            }
+
 
             if (!init_)
             {
@@ -1035,7 +1065,6 @@ public:
                     safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
 
                     publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
-                    publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
 
 
                     cerr<<"exploration: safestGoal "<<safestGoal<<endl;
@@ -1065,7 +1094,7 @@ public:
                     cerr<<"map exploration score: "<<mapScore<<endl;
                     
 
-                    if( currentEdgesFrontiers.size() < 2){
+                    if( currentEdgesFrontiers.size() == 0){
 
                         explore_state_ = FINISH_EXPLORE;
                         break;
@@ -1097,32 +1126,32 @@ public:
                 case FINISH_EXPLORE:
                 {
 
-                    cerr<<"FINISH_EXPLORE "<<endl;
+                    // cerr<<"FINISH_EXPLORE "<<endl;
 
-                    currentAlgoMap_ = getCurrentMap();
-                    globalStart_ = convertPoseToPix(robotPose_);
+                    // currentAlgoMap_ = getCurrentMap();
+                    // globalStart_ = convertPoseToPix(robotPose_);
 
-                    cv::Point safestGoal;
-                    if (!goalCalculator.findSafestLocation(currentAlgoMap_, globalStart_, safestGoal))
-                    {
+                    // cv::Point safestGoal;
+                    // if (!goalCalculator.findSafestLocation(currentAlgoMap_, globalStart_, safestGoal))
+                    // {
                         
-                        cerr<<"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "<<endl;
-                        return true;
-                    }
+                    //     cerr<<"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "<<endl;
+                    //     return true;
+                    // }
 
-                    safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
+                    // safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
 
-                    publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
-                    publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
+                    // publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
+                    // publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
 
 
-                    cerr<<"exploration FINISH_EXPLORE: safestGoal "<<safestGoal<<endl;
+                    // cerr<<"exploration FINISH_EXPLORE: safestGoal "<<safestGoal<<endl;
 
-                    bool result = sendGoal(convertPixToPose(safestGoal, robotPose_.pose.orientation));  
+                    // bool result = sendGoal(convertPixToPose(safestGoal, robotPose_.pose.orientation));  
 
-                    cerr<<"exploration: mov_base_result "<<result<<endl;   
+                    // cerr<<"exploration: mov_base_result "<<result<<endl;   
 
-                    ros::Duration(1).sleep();
+                    // ros::Duration(1).sleep();
      
                     
                     return true;
@@ -1141,12 +1170,7 @@ public:
         {
             ros::spinOnce();
 
-            if (coverage_state_ == COVERAGE_DONE)
-            {
-
-                return;
-            }
-
+            
             if (!init_)
             {
 
@@ -1201,7 +1225,8 @@ public:
 
                     path_ =
                         disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix(), true);          
+                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix(), 
+                                                                wanted_coverage_score_);          
 
 
 
@@ -1245,6 +1270,11 @@ public:
 
                         bool result = sendGoal(coveragePathPoses_[i]);
 
+                        if( exit_){
+
+                            return;
+                        }
+
                         if (result)
                         {
                             cerr << i << ": Waypoint reached!" << endl;
@@ -1256,14 +1286,16 @@ public:
                     }
 
                     coverage_state_ = BACK_TO_STARTING_LOCATION;
-
-                    prevAlgoMap_ = currentAlgoMap_.clone();
-
                     break;
                 }
                 case BACK_TO_STARTING_LOCATION:
                 {   
                     cerr<<" BACK_TO_STARTING_LOCATION "<<endl;   
+            
+                    cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
+                    cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
+
+                    publishSafestGoalMarker(startingLocation_);
 
                     bool result = sendGoal(startingLocation_);
 
@@ -1318,6 +1350,11 @@ public:
         bool result = true;
         while(ros::ok()) {
 
+            if( exit_){
+
+                return true;
+            }
+
             moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
 
             if( moveBaseController_.moveBaseClient_.getState() == actionlib::SimpleClientGoalState::SUCCEEDED 
@@ -1342,9 +1379,9 @@ public:
                          cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y));
 
 
-            cerr<<" the duration is "<<duration<<" distFromGoal "<<distFromGoal<<endl;
-            if( duration > duration_wait_for_move_base_response_ && distFromGoal < 2.0){ 
-                return false;
+            // cerr<<" the duration is "<<duration<<" distFromGoal "<<distFromGoal<<endl;
+            if( duration > duration_wait_for_move_base_response_ && distFromGoal < 1.0){ 
+                return true;
             }
 
             ros::spinOnce();
@@ -1377,7 +1414,6 @@ public:
                 Hi yakir,  can you change the file format  to these:
                 YYYY_MM_DD_HH_MM_(Duration_in_mins)_percentage.png for sorting purpose.
                 For "rosparam set /disinfect_report" use the same format YYYY_MM_DD_HH_MM_(Duration_in_mins)_percentage without .png extension.
-
             */
             
 
@@ -1388,7 +1424,7 @@ public:
            
 
             string image_name_format = startingTime_ + '_' +to_string(durationMinutes)+ '_' + to_string(int(percentCoverage_));
-            string full_img_name = coverage_img_path_ + "/"+image_name_format+".png";
+            string full_img_name = coverage_img_path_ + image_name_format+".png";
             node_.setParam("/coverage/image_name", image_name_format);
 
             cerr<<"full_img_name: "<<full_img_name<<endl;
@@ -1457,7 +1493,6 @@ private:
 
     cv::Mat currentAlgoMap_;
 
-    cv::Mat prevAlgoMap_;
 
     ros::NodeHandle node_;
 
@@ -1498,10 +1533,12 @@ private:
 
     string baseFrame_ = "base_footprint";
 
+    bool reducing_goals_ = true;
+
 
     double robot_radius_meters_ = 0.3;
 
-    double nim_map_score_to_finish_exploration_ = 70.0;
+    double wanted_coverage_score_ = 0.95;
 
     double duration_wait_for_move_base_response_ = 15.0;
 
@@ -1525,10 +1562,12 @@ private:
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "map_coverage_exploration_node");
-
+    ros::init(argc, argv, "map_coverage_exploration_node" , ros::init_options::NoSigintHandler);
 
     MapCoverageManager mapCoverageManager;
+    signal(SIGINT, (void (*)(int))MapCoverageManager::mySigintHandler); 
+
+
     if ( mapCoverageManager.exlpore()) {
         
         mapCoverageManager.coverage();
@@ -1551,20 +1590,22 @@ int main(int argc, char **argv)
 //     float mapResolution_ = 0.05;
 //     float distBetweenGoalsM_ = 0.5;
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
-//     float robot_radius_meters_ = 0.0;
+//     float robot_radius_meters_ = 0.2;
 
-//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/map.pgm",0);
+//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/data/2/map.pgm",0);
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
 
+//     // imwrite("/home/yakir/distance_transform_coverage_ws/data/2/mappingMap_flip.pgm",currentAlgoMap_);
+//     // return 0;
    
 //     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
 
-//     if( true) {
+//     if( false) {
         
 //         cerr<<"yakir "<<endl;
-//         cv::Point globalStart_(80,118);
+//         cv::Point globalStart_(402,100);
 //         cv::Point safestGoal;
 
              
@@ -1579,11 +1620,11 @@ int main(int argc, char **argv)
 //         return 0;
 //     }
 
-//     if( false) {
+//     if( true) {
 
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(380, 207);
+//         cv::Point2d currentPosition(402,108);
 //         cv::Point2d goal = currentPosition;
 //         // // calc the distance-transform-img from current goal
 //         if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
@@ -1605,7 +1646,7 @@ int main(int argc, char **argv)
 
 //         vector<cv::Point> path =
 //             disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-//                                                 goal, distanceTransformImg, pixDist, true);          
+//                                                 goal, distanceTransformImg, pixDist, 0.95);          
 
 
 

@@ -3,24 +3,28 @@
     <arg name="distance_between_goals_m" default="0.5" />  
     <arg name="robot_raduis" default="0.2" />  
     <arg name="coverage_image_path" default="/home/haystack/haystack_disinfect_report/images/" /> 
-    <arg name="exploration_score" default="70.0" />     
+    <arg name="wanted_coverage_score" default="0.90" />     
+
     <arg name="duration_wait_for_move_base_response" default="15.0" />  
 
     <arg name="base_frame" default="base_footprint" />  
     <arg name="global_frame" default="map" />  
 
-  
+    <arg name="reducing_goals" default="true" />  
+        
     <node name="map_coverage_node" pkg="map_coverage" 
             type="map_coverage_node">   
 
         <param name="distance_between_goals_m" value="$(arg distance_between_goals_m)" /> 
         <param name="robot_raduis" value="$(arg robot_raduis)" /> 
-        <param name="exploration_score" value="$(arg exploration_score)" /> 
+        <param name="wanted_coverage_score" value="$(arg wanted_coverage_score)" /> 
         <param name="coverage_image_path" value="$(arg coverage_image_path)" /> 
 
         <param name="base_frame" value="$(arg base_frame)" /> 
         <param name="global_frame" value="$(arg global_frame)" /> 
-
+        
+        
+        <param name="reducing_goals" value="$(arg reducing_goals)" /> 
 
        
     </node>
