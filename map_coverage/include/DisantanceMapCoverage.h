@@ -1,3 +1,32 @@
+
+Skip to content
+Pull requests
+Issues
+Marketplace
+Explore
+@YakirHuri
+cognimbus /
+distance_transform_coverage_exploration
+Public
+
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security
+Insights
+
+    Settings
+
+distance_transform_coverage_exploration/map_coverage/include/DisantanceMapCoverage.h
+@YakirHuri
+YakirHuri added coverage score (0-1)
+Latest commit 03087b8 23 days ago
+History
+1 contributor
+471 lines (335 sloc) 14.4 KB
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <thread>
@@ -33,20 +62,86 @@ public:
 
     ~DisantanceMapCoverage() {}
 
+
+    double getWantedCoverArea(const cv::Mat &imgMap, const cv::Point& start,
+        double dist_between_points) {
+        
+        // calculate wanted coverage area 
+        Mat binary  = cv::Mat(imgMap.rows, imgMap.cols, 
+            CV_8UC1, cv::Scalar(0));
+        
+        binary.setTo(255, imgMap == 254);
+
+        vector<vector<Point>> contours;
+        vector<Vec4i> hierarchy;
+
+        findContours(binary, contours, hierarchy, RETR_EXTERNAL,
+                     CHAIN_APPROX_NONE, Point(0, 0));
+        
+    
+        
+        if( contours.size() == 0 ){
+
+            return -1;
+        }             
+
+        bool foundCont = false;
+        int cotourIndex = -1;
+        for( int i =0; i < contours.size(); i++ ){
+
+            if ( pointPolygonTest(contours[i], start, false) > 0){
+                cotourIndex = i;
+                foundCont = true;
+            } else {
+                
+                drawContours(binary, contours, i, Scalar(0), -1 );
+ 
+            }
+        }
+
+        if( !foundCont ){
+            return -1;
+        }
+
+        double contArea =   contourArea(contours[cotourIndex]);
+        cerr<<" contArea "<<contArea<<" dist_between_points "<<dist_between_points<<endl;
+        int wantedCoverArea = contArea / dist_between_points;
+        // imshow("binary",binary);
+        // waitKey(0);
+
+
+        return wantedCoverArea;
+
+
+    }
+
     vector<cv::Point> getCoveragePath(const cv::Mat &imgMap,
                         const cv::Point& start,
                         const cv::Point& goal,
                         cv::Mat& distanceTransformImg,
                         double dist_between_points,                        
-                        bool stopWhenGoalReached = false)
+                        float wanted_coverage_score )
     {      
         cv::Mat visitedCells(distanceTransformImg.rows,
                              distanceTransformImg.cols, CV_8UC1, cv::Scalar(NOT_VISITED));
 
+        vector<cv::Point> path;
+        
+        int wantedCoverArea = getWantedCoverArea(imgMap,start, dist_between_points);
+        cerr<<" wantedCoverArea "<<wantedCoverArea<<endl;
+
+        if( wantedCoverArea == -1 ){
+
+            cerr<<" error wantedCoverArea "<<endl;
+            return path;
+        }
+
+        
         cv::Mat grayScaleImg  = imgMap.clone();
         cvtColor(grayScaleImg, grayScaleImg, COLOR_GRAY2BGR);
 
-        vector<cv::Point> path;
+
+
         cv::Point currentP(start.x, start.y);
 
         std::map<string, cv::Point> son_father;
@@ -67,40 +162,23 @@ public:
             bool foundN = findNeighborCell(distanceTransformImg, visitedCells,
                                            currentP, NeighborCell, grayScaleImg, dist_between_points);
 
-            
-            // if( foundN && stopWhenGoalReached){
+            float totalCoverSoFar = float((son_father.size() * dist_between_points )) / float(wantedCoverArea);
+
+            cerr<<" totalCoverSoFar"<<totalCoverSoFar<<" son_father.size() "<<son_father.size()<<endl;
+
+            if( totalCoverSoFar > wanted_coverage_score){
                 
-            //     float currPvalue =
-            //          distanceTransformImg.at<int>(currentP.y, currentP.x);
-            //     float dist = manhattan_distance(currentP, goal);
-            //     if ( (dist <= float(dist_between_points) * 1) ||
-            //         currPvalue <= dist_between_points )
-            //     {   
-
-            //         cerr<<"11111111111111111111111111111 "<<endl;
-
-            //         break;
-            //     }
-            // }
+                break;               
+            }
 
             // if not found
             if (!foundN)
             {   
 
-                float currPvalue =
-                     distanceTransformImg.at<int>(currentP.y, currentP.x);
-                float dist = manhattan_distance(currentP, goal);
-                if ( (dist <= float(dist_between_points) * 1) ||
-                    currPvalue <= dist_between_points )
-                {   
-
-                    cerr<<"222222222222222222222222222 "<<endl;
-
-                    break;
-                }
                 
 
                 path.push_back(currentP);
+
                 visitedCells.at<uchar>(currentP.y, currentP.x) = VISITED;
 
                 string pString = getPointString(currentP);
@@ -182,6 +260,7 @@ public:
                 }
 
                 path.push_back(currentP);
+
 
                 son_father[getPointString(NeighborCell)] = currentP;
 
@@ -419,3 +498,20 @@ private:
 };
 
 #endif
+Footer
+© 2022 GitHub, Inc.
+Footer navigation
+
+    Terms
+    Privacy
+    Security
+    Status
+    Docs
+    Contact GitHub
+    Pricing
+    API
+    Training
+    Blog
+    About
+
+You have no unread notifications
