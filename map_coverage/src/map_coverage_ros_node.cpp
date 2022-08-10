@@ -1380,9 +1380,11 @@ public:
 
 
             // cerr<<" the duration is "<<duration<<" distFromGoal "<<distFromGoal<<endl;
-            if( duration > duration_wait_for_move_base_response_ && distFromGoal < 1.0){ 
+             cerr<<" the duration is "<<duration<<endl;
+            if( duration > duration_wait_for_move_base_response_ /*&& distFromGoal < 1.0*/){ 
                 return true;
             }
+
 
             ros::spinOnce();
         }  
