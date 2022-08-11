@@ -1338,7 +1338,56 @@ public:
         }
 
        
-    }   
+    } 
+
+    string getMoveBaseState(actionlib::SimpleClientGoalState state) {
+        
+        switch (state.state_)
+        {
+            case actionlib::SimpleClientGoalState::ACTIVE:
+            {
+                return "ACTIVE";
+
+            }
+            case actionlib::SimpleClientGoalState::PENDING:
+            {
+                return "PENDING";
+
+            }
+            case actionlib::SimpleClientGoalState::RECALLED:
+            {
+                return "RECALLED";
+
+            }
+            case actionlib::SimpleClientGoalState::REJECTED:
+            {
+                return "REJECTED";
+
+            }
+            case actionlib::SimpleClientGoalState::PREEMPTED:
+            {
+                return "PREEMPTED";
+
+            }
+            case actionlib::SimpleClientGoalState::ABORTED:
+            {
+                return "ABORTED";
+
+            }
+            case actionlib::SimpleClientGoalState::SUCCEEDED:
+            {
+                return "SUCCEEDED";
+
+            }
+            case actionlib::SimpleClientGoalState::LOST:
+            {
+                return "LOST";
+
+            }
+        }
+
+        return "";
+    }  
 
     bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg)
     {      
@@ -1362,10 +1411,7 @@ public:
 
             if( move_base_state == actionlib::SimpleClientGoalState::ACTIVE 
                 ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
-            {   
-
-
-
+            { 
                 continue;
             }    
             
@@ -1377,7 +1423,8 @@ public:
             }
             else
             {   
-               cerr<<"move base failed"<<endl;
+                string strState = getMoveBaseState(move_base_state);
+                cerr<<"move base failed:  "<<strState<<endl;
 
                 result = false;
                 break;
