@@ -1364,7 +1364,7 @@ public:
                 ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
             {   
 
-                cerr<<" 1111111111111111111111111 "<<endl;
+                cerr<<" 1111111111111111111111111 "<<move_base_state.getText()<<endl;
 
 
                 continue;
@@ -1372,14 +1372,14 @@ public:
             
             if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){
                 
-                cerr<<" 2222222222222222222222 "<<endl;
+                cerr<<" 2222222222222222222222 "<<move_base_state.getText()<<endl;
 
                 result = true;
                 break;
             }
             else
             {   
-               cerr<<" 333333333333333 "<<endl;
+               cerr<<" 333333333333333 "<<move_base_state.getText()<<endl;
 
                 result = false;
                 break;
