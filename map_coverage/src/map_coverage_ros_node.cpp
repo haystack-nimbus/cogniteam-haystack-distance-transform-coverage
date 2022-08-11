@@ -1356,12 +1356,14 @@ public:
             }
 
             moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
+            auto move_base_state = moveBaseController_.moveBaseClient_.getState();
+            cerr<<" move_base_state "<<move_base_state<<endl;
 
-            if( moveBaseController_.moveBaseClient_.getState() == actionlib::SimpleClientGoalState::SUCCEEDED 
-                ||  moveBaseController_.moveBaseClient_.getState() == actionlib::SimpleClientGoalState::ABORTED
-                ||  moveBaseController_.moveBaseClient_.getState() == actionlib::SimpleClientGoalState::REJECTED){
+            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED 
+                ||  move_base_state == actionlib::SimpleClientGoalState::ABORTED
+                ||  move_base_state == actionlib::SimpleClientGoalState::REJECTED) {
                 
-                if( moveBaseController_.moveBaseClient_.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
+                if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){
                     result = true;
                 } else {
                     result = false;
