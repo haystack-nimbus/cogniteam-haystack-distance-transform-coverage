@@ -1355,19 +1355,33 @@ public:
                 return true;
             }
 
+          
+
             moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
             auto move_base_state = moveBaseController_.moveBaseClient_.getState();
-            cerr<<" move_base_state "<<move_base_state<<endl;
 
-            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED 
-                ||  move_base_state == actionlib::SimpleClientGoalState::ABORTED
-                ||  move_base_state == actionlib::SimpleClientGoalState::REJECTED) {
+            if( move_base_state == actionlib::SimpleClientGoalState::ACTIVE 
+                ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
+            {   
+
+                cerr<<" 1111111111111111111111111 "<<endl;
+
+
+                continue;
+            }    
+            
+            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){
                 
-                if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){
-                    result = true;
-                } else {
-                    result = false;
-                }
+                cerr<<" 2222222222222222222222 "<<endl;
+
+                result = true;
+                break;
+            }
+            else
+            {   
+               cerr<<" 333333333333333 "<<endl;
+
+                result = false;
                 break;
             } 
 
