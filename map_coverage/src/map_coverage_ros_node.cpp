@@ -201,8 +201,8 @@ public:
         edges_frontires_marker_array_Pub =
             node_.advertise<visualization_msgs::MarkerArray>("/edges_frontiers_marker_arr", 10);
 
-        coverage_waypoints_marker_array_Pub =
-            node_.advertise<visualization_msgs::MarkerArray>("/coverage_waypoints_marker_array", 10);
+        covered_goals_pub_ =
+            node_.advertise<visualization_msgs::MarkerArray>("/covered_goals", 10);
 
         global_start_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/global_start", 10);
 
@@ -602,16 +602,15 @@ public:
         edges_frontires_marker_array_Pub.publish(Markerarr);
     }
 
-    void publishCoverageWayPoints(const vector<geometry_msgs::PoseStamped> &coveragePathPoses,
-                                  int courrentIndex)
+    void publishCoveredGoals()
     {
 
         visualization_msgs::MarkerArray Markerarr;
 
-        for (int i = 0; i < coveragePathPoses.size(); i++)
+        for (int i = 0; i < covered_goals_.size(); i++)
         {
 
-            geometry_msgs::PoseStamped p = coveragePathPoses[i];
+            geometry_msgs::PoseStamped p = covered_goals_[i];
 
             visualization_msgs::Marker pOnEgge;
             pOnEgge.header.frame_id = globalFrame_;
@@ -627,29 +626,18 @@ public:
             pOnEgge.pose.orientation.y = 0;
             pOnEgge.pose.orientation.z = 0;
             pOnEgge.pose.orientation.w = 1.0;
-            pOnEgge.scale.x = 0.1;
-            pOnEgge.scale.y = 0.1;
-            pOnEgge.scale.z = 0.1;
+            pOnEgge.scale.x = 0.3;
+            pOnEgge.scale.y = 0.3;
+            pOnEgge.scale.z = 0.3;
             pOnEgge.color.a = 1.0;
-            if (i < courrentIndex)
-            {
-
-                pOnEgge.color.r = 0;
-                pOnEgge.color.g = 1.0;
-                pOnEgge.color.b = 0;
-            }
-            else
-            {
-
-                pOnEgge.color.r = 1.0;
-                pOnEgge.color.g = 0;
-                pOnEgge.color.b = 0;
-            }
+            pOnEgge.color.r = 0;
+            pOnEgge.color.g = 1.0;
+            pOnEgge.color.b = 0;
 
             Markerarr.markers.push_back(pOnEgge);
         }
 
-        coverage_waypoints_marker_array_Pub.publish(Markerarr);
+        covered_goals_pub_.publish(Markerarr);
     }
 
 
@@ -1068,8 +1056,11 @@ public:
 
 
                     cerr<<"exploration: safestGoal "<<safestGoal<<endl;
-
-                    bool result = sendGoal(convertPixToPose(safestGoal, robotPose_.pose.orientation));  
+                    
+                    auto safestGoalPose = convertPixToPose(safestGoal, robotPose_.pose.orientation);
+                    bool result = sendGoal(safestGoalPose);                      
+                    
+                    covered_goals_.push_back(safestGoalPose);
 
                     cerr<<"exploration: mov_base_result "<<result<<endl;                            
 
@@ -1099,15 +1090,27 @@ public:
                         explore_state_ = FINISH_EXPLORE;
                         break;
                     }
-                    
+
 
                     geometry_msgs::Quaternion q;
                     q.w = 1;
                     auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);
+
+                    if( checkIfGoalInsideBlackList(nextFrontierGoal)){
+
+                        explore_state_ = FINISH_EXPLORE;
+                        break;
+                    }
+                    
+
+                    
                     publishSafestGoalMarker(nextFrontierGoal);
                     publishEdgesFrontiers(currentEdgesFrontiers);
 
                     bool result = sendGoal(nextFrontierGoal);
+
+                    covered_goals_.push_back(nextFrontierGoal);
+
 
                     cerr<<"move_base result for NAV_TO_NEXT_FRONTIER "<<result<<endl;
 
@@ -1124,34 +1127,7 @@ public:
                     break;
                 }
                 case FINISH_EXPLORE:
-                {
-
-                    // cerr<<"FINISH_EXPLORE "<<endl;
-
-                    // currentAlgoMap_ = getCurrentMap();
-                    // globalStart_ = convertPoseToPix(robotPose_);
-
-                    // cv::Point safestGoal;
-                    // if (!goalCalculator.findSafestLocation(currentAlgoMap_, globalStart_, safestGoal))
-                    // {
-                        
-                    //     cerr<<"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "<<endl;
-                    //     return true;
-                    // }
-
-                    // safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
-
-                    // publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
-                    // publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
-
-
-                    // cerr<<"exploration FINISH_EXPLORE: safestGoal "<<safestGoal<<endl;
-
-                    // bool result = sendGoal(convertPixToPose(safestGoal, robotPose_.pose.orientation));  
-
-                    // cerr<<"exploration: mov_base_result "<<result<<endl;   
-
-                    // ros::Duration(1).sleep();
+                {                  
      
                     
                     return true;
@@ -1176,7 +1152,6 @@ public:
 
                 continue;;
             }
-            cerr << " map Recived !! " << endl;
 
             if (!updateRobotLocation())
             {
@@ -1258,17 +1233,25 @@ public:
                     {   
 
                         percentCoverage_ = ( float(i) / float(coveragePathPoses_.size()))  * 100.0;
-                        node_.setParam("/coverage/percentage", percentCoverage_);
+                        node_.setParam("/coverage/percentage", percentCoverage_);    
 
-                      
+
 
                         publishCoverageImgMap();
-
                         
                         publishCoveragePath(coveragePathPoses_);
-                        publishCoverageWayPoints(coveragePathPoses_, i);
+                        // publishCoveredGoals(coveragePathPoses_, i);
+
+                        // the goal in the black list (covered goals)
+                        if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
+
+                            continue;
+                        }
+                        
 
                         bool result = sendGoal(coveragePathPoses_[i]);
+
+                        covered_goals_.push_back(coveragePathPoses_[i]);
 
                         if( exit_){
 
@@ -1282,6 +1265,8 @@ public:
                         else
                         {
                             cerr << i << ": Failed to reach waypoint" << endl;
+
+                            addRelevantGoalsToBlackList(coveragePathPoses_[i]);
                         }
                     }
 
@@ -1302,13 +1287,21 @@ public:
                     if (result)
                     {
                         cerr <<"BACK_TO_STARTING_LOCATION reached!" << endl;
+
+                        coverage_state_ = COVERAGE_DONE;  
+
+                        break;
+
                     }
                     else
                     {
-                        cerr <<" Failed to reach BACK_TO_STARTING_LOCATION" << endl;
+                        cerr <<" Failed to reach BACK_TO_STARTING_LOCATION, try again" << endl;
+
+                        coverage_state_ = BACK_TO_STARTING_LOCATION;  
+
+                        break;
                     }
 
-                    coverage_state_ = COVERAGE_DONE;  
                     
                 }
                 case COVERAGE_DONE:
@@ -1325,7 +1318,13 @@ public:
                 
                 case ERROR_COVERAGE:
                 {   
-                    cerr<<" ERROR_COVERAGE "<<endl;  
+
+                    if(!errCoverage_)
+                    {
+                        cerr<<" ERROR_COVERAGE "<<endl; 
+                        errCoverage_ = true; 
+
+                    }
                     
                     node_.setParam("/coverage/state", "STOPPED");
 
@@ -1339,6 +1338,43 @@ public:
 
        
     } 
+
+    bool checkIfGoalInsideBlackList( const geometry_msgs::PoseStamped& currGoal ){
+
+        for(int i = 0; i < coveragePathPoses_.size(); i++ ){
+
+            auto goalFromPath = coveragePathPoses_[i];
+
+            if (goalFromPath.pose.position.x == currGoal.pose.position.x && 
+               goalFromPath.pose.position.y == currGoal.pose.position.y  ){
+
+                return true;
+            }
+        }
+
+        return false;
+
+    }
+
+    void addRelevantGoalsToBlackList(const geometry_msgs::PoseStamped& currGoal){
+
+        for(int i = 0; i < coveragePathPoses_.size(); i++ ){
+
+            auto goalFromPath = coveragePathPoses_[i];
+
+            float distM = 
+                goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
+                    cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y));
+
+            if ( distM < 1.0) {
+
+                covered_goals_.push_back(goalFromPath);
+            }
+
+        }
+
+
+    }
 
     string getMoveBaseState(actionlib::SimpleClientGoalState state) {
         
@@ -1409,22 +1445,25 @@ public:
             moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
             auto move_base_state = moveBaseController_.moveBaseClient_.getState();
 
+            string strState = getMoveBaseState(move_base_state);
+
+            cerr<<"strState:  "<<strState<<endl;
+
+
+
             if( move_base_state == actionlib::SimpleClientGoalState::ACTIVE 
                 ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
             { 
                 continue;
             }    
             
-            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){
-                
+            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){                
 
                 result = true;
                 break;
             }
             else
             {   
-                string strState = getMoveBaseState(move_base_state);
-                cerr<<"move base failed:  "<<strState<<endl;
 
                 result = false;
                 break;
@@ -1441,10 +1480,10 @@ public:
 
 
             // cerr<<" the duration is "<<duration<<" distFromGoal "<<distFromGoal<<endl;
-             cerr<<" the duration is "<<duration<<endl;
-            if( duration > duration_wait_for_move_base_response_ /*&& distFromGoal < 1.0*/){ 
-                return true;
-            }
+            //  cerr<<" the duration is "<<duration<<endl;
+            // if( duration > duration_wait_for_move_base_response_ /*&& distFromGoal < 1.0*/){ 
+            //     return true;
+            // }
 
 
             ros::spinOnce();
@@ -1522,7 +1561,7 @@ private:
 
     ros::Publisher edges_frontires_marker_array_Pub;
 
-    ros::Publisher coverage_waypoints_marker_array_Pub;
+    ros::Publisher covered_goals_pub_;
 
     ros::Publisher start_a_star_marker_pub_;
 
@@ -1555,6 +1594,8 @@ private:
     cv::Point globalStart_;
 
     cv::Mat currentAlgoMap_;
+
+    vector<geometry_msgs::PoseStamped> covered_goals_;
 
 
     ros::NodeHandle node_;
@@ -1616,6 +1657,9 @@ private:
     
 
     bool imgSaved_ = false;
+    
+
+    bool errCoverage_ = false;
 
     high_resolution_clock::time_point startingCoverageTime_;
 
@@ -1655,12 +1699,10 @@ int main(int argc, char **argv)
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
 //     float robot_radius_meters_ = 0.2;
 
-//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/data/2/map.pgm",0);
+//     Mat currentAlgoMap_ = imread("/home/yakir/Documents/haystack_bugs/errr1/map.pgm",0);
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
-
-//     // imwrite("/home/yakir/distance_transform_coverage_ws/data/2/mappingMap_flip.pgm",currentAlgoMap_);
-//     // return 0;
+  
    
 //     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
@@ -1687,7 +1729,7 @@ int main(int argc, char **argv)
 
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(402,108);
+//         cv::Point2d currentPosition(411, 391);
 //         cv::Point2d goal = currentPosition;
 //         // // calc the distance-transform-img from current goal
 //         if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
@@ -1709,7 +1751,7 @@ int main(int argc, char **argv)
 
 //         vector<cv::Point> path =
 //             disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-//                                                 goal, distanceTransformImg, pixDist, 0.95);          
+//                                                 goal, distanceTransformImg, pixDist, 0.90);          
 
 
 
@@ -1725,7 +1767,7 @@ int main(int argc, char **argv)
 //         circle(dbg, goal, 2, Scalar(0,255,0), -1, 8, 0);
 //         circle(dbg, currentPosition, 2, Scalar(0,0,255), -1, 8, 0);  
 
-//         imwrite("/home/yakir/distance_transform_coverage_ws/dbg.png", dbg);
+//         // imwrite("/home/yakir/distance_transform_coverage_ws/dbg.png", dbg);
 //         imshow("dbg",dbg);
 //         // imshow("distanceTransformImg", grayDistImg);
 //         waitKey(0);
