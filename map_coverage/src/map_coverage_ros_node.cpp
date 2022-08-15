@@ -1317,6 +1317,7 @@ public:
                         //the goal in the black list (covered goals)
                         if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
 
+                            cerr<<" inside black list "<<endl;
                             continue;
                         }
                         
@@ -1421,7 +1422,7 @@ public:
                 goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
                     cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y));
 
-            if (distM < robot_radius_meters_ * 2)
+            if (distM < 0.3)
                 return true;
         }
 
