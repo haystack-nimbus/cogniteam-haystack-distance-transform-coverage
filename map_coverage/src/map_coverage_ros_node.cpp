@@ -1269,24 +1269,6 @@ public:
                                                             goal, distanceTransformImg, getDistanceBetweenGoalsPix(), 
                                                                 wanted_coverage_score_);
 
-                    // for( int i = 0; i < path_.size(); i++){
-
-
-                    //     if( i > 0 ){
-                    //         cv::line(dbg, path_[i], path_[i - 1], Scalar(34, 139, 139), 2);
-                    //     }
-
-                    // }     
-
-                    // circle(dbg, goal, 2, Scalar(0,255,0), -1, 8, 0);
-                    // circle(dbg, currentPosition, 2, Scalar(0,0,255), -1, 8, 0);   
-                                    
-
-                    // imwrite(ros::package::getPath("map_coverage") + "/dbg.png",dbg);
-                    // imwrite(ros::package::getPath("map_coverage") + "/distanceTransformImg.pgm",distanceTransformImg);
-
-
-
 
                     // convert the path into poses
                     coveragePathPoses_ = covertPointsPathToPoseRout(path_);
@@ -1300,12 +1282,11 @@ public:
                         node_.setParam("/coverage/percentage", percentCoverage_);    
 
 
-
                         publishCoverageImgMap();
                         
                         publishCoveragePath(coveragePathPoses_);
 
-                        publishCoveredGoals();
+                        // publishCoveredGoals();
 
                         //the goal in the black list (covered goals)
                         if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
