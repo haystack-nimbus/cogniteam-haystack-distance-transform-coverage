@@ -227,6 +227,16 @@ public:
 
         startingCoverageTime_ = high_resolution_clock::now();
 
+
+        float robotWidthM = 0.53;
+        float robotHeightM = 0.53;
+        float robotWidthPix = (1.0 / mapResolution_) * robotWidthM;
+        float robotHeightPix = (1.0 / mapResolution_) * robotHeightM;
+
+        DisantanceMapCoverage disantanceMapCoverage(true);
+        disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
+        disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
+
     }
 
     ~MapCoverageManager() {
@@ -1621,7 +1631,7 @@ private:
 
     float globalMapHeight_;
 
-    float mapResolution_ = -1;
+    float mapResolution_ = 0.05;
 
     bool init_ = false;
 
@@ -1691,26 +1701,34 @@ int main(int argc, char **argv)
 //     ros::init(argc, argv, "map_coverage_exploration_node");
 
 //     DistanceTransformGoalCalculator distanceTransformGoalCalculator;
-//     DisantanceMapCoverage disantanceMapCoverage(true);
-//     GoalCalculator goalCalculator;
 
 //     float mapResolution_ = 0.05;
 //     float distBetweenGoalsM_ = 0.5;
+
+//     float robotWidthM = 0.53;
+//     float robotHeightM = 0.53;
+//     float robotWidthPix = (1.0 / mapResolution_) * robotWidthM;
+//     float robotHeightPix = (1.0 / mapResolution_) * robotHeightM;
+
+//     DisantanceMapCoverage disantanceMapCoverage(true, robotWidthPix, robotHeightPix );
+//     GoalCalculator goalCalculator;
+
+    
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
 //     float robot_radius_meters_ = 0.2;
 
-//     Mat currentAlgoMap_ = imread("/home/yakir/Documents/haystack_bugs/errr1/map.pgm",0);
+//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/data/1/map.pgm",0);
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
   
    
-//     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
-//     addFreeSpaceDilation(currentAlgoMap_);
+//     //addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
+//     //addFreeSpaceDilation(currentAlgoMap_);
 
 //     if( false) {
         
 //         cerr<<"yakir "<<endl;
-//         cv::Point globalStart_(402,100);
+//         cv::Point globalStart_(380,207);
 //         cv::Point safestGoal;
 
              
@@ -1729,7 +1747,7 @@ int main(int argc, char **argv)
 
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(411, 391);
+//         cv::Point2d currentPosition(380, 207);
 //         cv::Point2d goal = currentPosition;
 //         // // calc the distance-transform-img from current goal
 //         if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
