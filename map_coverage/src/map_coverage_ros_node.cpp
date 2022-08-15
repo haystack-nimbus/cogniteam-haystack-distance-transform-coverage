@@ -1167,14 +1167,7 @@ public:
 
                     geometry_msgs::Quaternion q;
                     q.w = 1;
-                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);
-
-                    if( checkIfGoalInsideBlackList(nextFrontierGoal)){
-
-                        explore_state_ = FINISH_EXPLORE;
-                        break;
-                    }
-                    
+                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);                                   
 
                     
                     publishSafestGoalMarker(nextFrontierGoal);
@@ -1546,7 +1539,7 @@ public:
             // }
 
 
-            //addRelevantGoalsToBlackList();
+            //addGoalNearbyCameraScan();
 
             ros::spinOnce();
         }  
@@ -1557,7 +1550,7 @@ public:
     }
 
 
-    void addRelevantGoalsToBlackList() {
+    void addGoalNearbyCameraScan() {
 
 
         for (int i = 0; i < coveragePathPoses_.size(); i++) {
@@ -1573,7 +1566,7 @@ public:
                     goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
                         pCameraScanOnMap);
 
-                if( distM < (robot_radius_meters_ * 2) ) {
+                if( distM < (robot_radius_meters_ ) ) {
 
                     covered_goals_.push_back(goalFromPath);
                 }
