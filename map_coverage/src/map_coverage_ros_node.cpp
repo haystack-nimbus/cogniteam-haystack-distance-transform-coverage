@@ -495,9 +495,9 @@ public:
         mapping_map_ = currentGlobalMap_.clone();
 
 
-        // addDilationForGlobalMap(currentGlobalMap_, robot_radius_meters_, mapResolution_);
+        addDilationForGlobalMap(currentGlobalMap_, robot_radius_meters_, mapResolution_);
 
-        // addFreeSpaceDilation(currentGlobalMap_);
+        addFreeSpaceDilation(currentGlobalMap_);
 
         
     }
