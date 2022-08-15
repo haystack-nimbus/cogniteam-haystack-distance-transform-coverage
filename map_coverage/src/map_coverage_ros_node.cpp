@@ -124,7 +124,7 @@ void addDilationForGlobalMap(Mat &imgMap, float robot_radius_meters_, float mapR
 
     try
     {
-        int dilationPix = (1.0 / mapResolution) * (robot_radius_meters_ * 2);        
+        int dilationPix = (1.0 / mapResolution) * (robot_radius_meters_ );        
 
         cv::Mat binary = imgMap.clone();
         binary.setTo(0, imgMap != 0);
