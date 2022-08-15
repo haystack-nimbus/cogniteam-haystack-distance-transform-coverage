@@ -1253,10 +1253,10 @@ public:
                         // publishCoveredGoals(coveragePathPoses_, i);
 
                         // the goal in the black list (covered goals)
-                        if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
+                        // if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
 
-                            continue;
-                        }
+                        //     continue;
+                        // }
                         
 
                         bool result = sendGoal(coveragePathPoses_[i]);
