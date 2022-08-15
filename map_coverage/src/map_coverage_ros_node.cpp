@@ -53,9 +53,12 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
-
+#include <sensor_msgs/LaserScan.h>
 #include <boost/algorithm/string.hpp>
 #include <opencv2/opencv.hpp>
+
+#include <tf/tf.h>
+#include <tf/transform_listener.h>
 
 #include <vector>
 #include <iostream>
@@ -192,6 +195,9 @@ public:
             node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1,
                                                      &MapCoverageManager::globalMapCallback, this);
 
+        camera_scan_sub_ = node_.subscribe("/scan_from_shallow_cloud", 1,
+                                                      &MapCoverageManager::cameraScanCallback, this);                                             
+
         // pubs
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
             "/coverage_path", 1, false);   
@@ -260,6 +266,64 @@ public:
 
 
     } 
+
+    void cameraScanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
+    {
+
+        currentCameraScanMapPointsM_.clear();
+
+        for (double i = 0; i < scan->ranges.size(); i++)
+        {
+
+            if (isinf(scan->ranges[i]) == false)
+            {
+
+                double ray_angle = scan->angle_min + (i * scan->angle_increment);
+
+                cv::Point2d rayPoint((scan->ranges[i] * cos(ray_angle)),
+                                     (scan->ranges[i] * sin(ray_angle)));
+                                     
+                // transform to map frame
+                cv::Point3d p = cv::Point3d(rayPoint.x, rayPoint.y, 0);
+
+                auto transformedRayPoint = transformFrames(p, globalFrame_, scan->header.frame_id, scan->header.stamp);
+
+                currentCameraScanMapPointsM_.push_back(cv::Point2d(transformedRayPoint.point.x, transformedRayPoint.point.y));
+            }
+        }
+    }
+
+    geometry_msgs::PointStamped transformFrames(
+        Point3d objectPoint3d, string target_frame, string source_Frame, ros::Time t)
+    {
+
+        geometry_msgs::PointStamped pointStampedIn;
+        geometry_msgs::PointStamped pointStampedOut;
+
+        pointStampedIn.header.frame_id = source_Frame;
+        pointStampedIn.header.stamp = t;
+        pointStampedIn.point.x = objectPoint3d.x;
+        pointStampedIn.point.y = objectPoint3d.y;
+        pointStampedIn.point.z = objectPoint3d.z;
+
+        try
+        {
+            tf::StampedTransform transform_;   
+
+            tfListener_.lookupTransform(target_frame, source_Frame,
+                                        ros::Time(0), transform_);
+
+            tfListener_.transformPoint(target_frame, pointStampedIn, pointStampedOut );
+
+
+            return pointStampedOut;
+        }
+        catch (tf::TransformException ex)
+        {
+            ROS_ERROR("%s", ex.what());            
+        }
+    }
+
 
     Mat occupancyGridMatToGrayScale(const Mat &map)
     {
@@ -498,7 +562,6 @@ public:
         addDilationForGlobalMap(currentGlobalMap_, robot_radius_meters_, mapResolution_);
 
         addFreeSpaceDilation(currentGlobalMap_);
-
         
     }
 
@@ -626,7 +689,7 @@ public:
             pOnEgge.header.frame_id = globalFrame_;
             pOnEgge.header.stamp = ros::Time::now();
             pOnEgge.ns = "points_and_lines";
-            pOnEgge.id = i + 1;
+            pOnEgge.id = 99999 + 1;
             pOnEgge.action = visualization_msgs::Marker::ADD;
             pOnEgge.type = visualization_msgs::Marker::SPHERE;
             pOnEgge.pose.position.x = p.pose.position.x;
@@ -1211,9 +1274,7 @@ public:
                     path_ =
                         disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
                                                             goal, distanceTransformImg, getDistanceBetweenGoalsPix(), 
-                                                                wanted_coverage_score_);          
-
-
+                                                                wanted_coverage_score_);
 
                     // for( int i = 0; i < path_.size(); i++){
 
@@ -1250,13 +1311,14 @@ public:
                         publishCoverageImgMap();
                         
                         publishCoveragePath(coveragePathPoses_);
-                        // publishCoveredGoals(coveragePathPoses_, i);
 
-                        // the goal in the black list (covered goals)
-                        // if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
+                        publishCoveredGoals();
 
-                        //     continue;
-                        // }
+                        //the goal in the black list (covered goals)
+                        if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
+
+                            continue;
+                        }
                         
 
                         bool result = sendGoal(coveragePathPoses_[i]);
@@ -1355,11 +1417,12 @@ public:
 
             auto goalFromPath = coveragePathPoses_[i];
 
-            if (goalFromPath.pose.position.x == currGoal.pose.position.x && 
-               goalFromPath.pose.position.y == currGoal.pose.position.y  ){
+            float distM = 
+                goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
+                    cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y));
 
+            if (distM < robot_radius_meters_ * 2)
                 return true;
-            }
         }
 
         return false;
@@ -1496,6 +1559,8 @@ public:
             // }
 
 
+            void addRelevantGoalsToBlackList();
+
             ros::spinOnce();
         }  
 
@@ -1504,6 +1569,33 @@ public:
         return result;
     }
 
+
+    void addRelevantGoalsToBlackList() {
+
+
+        for (int i = 0; i < coveragePathPoses_.size(); i++) {
+
+            auto goalFromPath = coveragePathPoses_[i];
+
+            for( int j = 0; j < currentCameraScanMapPointsM_.size(); j++ ) { 
+
+
+                auto pCameraScanOnMap = currentCameraScanMapPointsM_[i];
+
+                float distM = 
+                    goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
+                        pCameraScanOnMap);
+
+                if( distM < (robot_radius_meters_ * 2) ) {
+
+                    covered_goals_.push_back(goalFromPath);
+                }
+
+            }
+
+        }
+        
+    }
     
     void saveCoverageImg(){
 
@@ -1561,6 +1653,8 @@ private:
     // subs
     ros::Subscriber global_map_sub_;
 
+    ros::Subscriber camera_scan_sub_;
+
     // pubs
 
     ros::Publisher cuurentCoveragePathPub_;
@@ -1593,13 +1687,7 @@ private:
 
     std::vector<Frontier> currentEdgesFrontiers_;
 
-    vector<cv::Point> gloalPath_;
-
     cv::Point startCoveragePoint_;
-
-    cv::Point goalCoveragePoint_;
-
-    cv::Point aStarStart_;
 
     cv::Point globalStart_;
 
@@ -1607,17 +1695,17 @@ private:
 
     vector<geometry_msgs::PoseStamped> covered_goals_;
 
-
     ros::NodeHandle node_;
 
-    // timers
-    ros::Timer algoTimer_;
 
     // params
 
     geometry_msgs::PoseStamped robotPose_;
 
+
     geometry_msgs::PoseStamped robotStartLocation_;
+
+    vector<cv::Point2d> currentCameraScanMapPointsM_;
 
     cv::Mat currentGlobalMap_;
 
