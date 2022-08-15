@@ -1414,9 +1414,9 @@ public:
 
     bool checkIfGoalInsideBlackList( const geometry_msgs::PoseStamped& currGoal ){
 
-        for(int i = 0; i < coveragePathPoses_.size(); i++ ){
+        for(int i = 0; i < covered_goals_.size(); i++ ){
 
-            auto goalFromPath = coveragePathPoses_[i];
+            auto goalFromPath = covered_goals_[i];
 
             float distM = 
                 goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
@@ -1432,21 +1432,7 @@ public:
 
     void addRelevantGoalsToBlackList(const geometry_msgs::PoseStamped& currGoal){
 
-        for(int i = 0; i < coveragePathPoses_.size(); i++ ){
-
-            auto goalFromPath = coveragePathPoses_[i];
-
-            float distM = 
-                goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
-                    cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y));
-
-            if ( distM < 1.0) {
-
-                covered_goals_.push_back(goalFromPath);
-            }
-
-        }
-
+        covered_goals_.push_back(currGoal);
 
     }
 
