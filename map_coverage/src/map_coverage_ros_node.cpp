@@ -425,14 +425,23 @@ public:
             
             int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
 
+            cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
             if( costVal != 0 ){
 
                 path_poses_with_status_.setStatByIndex(i, true);
+
+            } else {
+
+                cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
 
             }
 
 
         }
+
+        publishWaypointsWithStatus();
+
 
 
     }   
@@ -1215,7 +1224,6 @@ public:
                         
                         publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
 
-                        publishWaypointsWithStatus();
 
                         // the waypoint is checked
                         if( path_poses_with_status_.status_[i] == true ){
