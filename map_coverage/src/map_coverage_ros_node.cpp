@@ -699,12 +699,12 @@ public:
             pOnEgge.pose.orientation.y = 0;
             pOnEgge.pose.orientation.z = 0;
             pOnEgge.pose.orientation.w = 1.0;
-            pOnEgge.scale.x = 0.3;
-            pOnEgge.scale.y = 0.3;
-            pOnEgge.scale.z = 0.3;
+            pOnEgge.scale.x = 0.2;
+            pOnEgge.scale.y = 0.2;
+            pOnEgge.scale.z = 0.2;
             pOnEgge.color.a = 1.0;
-            pOnEgge.color.r = 0;
-            pOnEgge.color.g = 1.0;
+            pOnEgge.color.r = 1;
+            pOnEgge.color.g = 0.0;
             pOnEgge.color.b = 0;
 
             Markerarr.markers.push_back(pOnEgge);
@@ -1133,7 +1133,6 @@ public:
                     auto safestGoalPose = convertPixToPose(safestGoal, robotPose_.pose.orientation);
                     bool result = sendGoal(safestGoalPose);                      
                     
-                    covered_goals_.push_back(safestGoalPose);
 
                     cerr<<"exploration: mov_base_result "<<result<<endl;                            
 
@@ -1175,7 +1174,6 @@ public:
 
                     bool result = sendGoal(nextFrontierGoal);
 
-                    covered_goals_.push_back(nextFrontierGoal);
 
 
                     cerr<<"move_base result for NAV_TO_NEXT_FRONTIER "<<result<<endl;
@@ -1286,7 +1284,7 @@ public:
                         
                         publishCoveragePath(coveragePathPoses_);
 
-                        // publishCoveredGoals();
+                        publishCoveredGoals();
 
                         //the goal in the black list (covered goals)
                         if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
@@ -1298,7 +1296,8 @@ public:
 
                         bool result = sendGoal(coveragePathPoses_[i]);
 
-                        covered_goals_.push_back(coveragePathPoses_[i]);
+
+                        addRelevantGoalsToBlackList(coveragePathPoses_[i]);
 
                         if( exit_){
 
@@ -1313,7 +1312,6 @@ public:
                         {
                             cerr << i << ": Failed to reach waypoint" << endl;
 
-                            addRelevantGoalsToBlackList(coveragePathPoses_[i]);
                         }
                     }
 
@@ -1406,7 +1404,22 @@ public:
 
     void addRelevantGoalsToBlackList(const geometry_msgs::PoseStamped& currGoal){
 
-        covered_goals_.push_back(currGoal);
+        bool alreadyExsist = false;
+        for( int i = 0; i < covered_goals_.size(); i++){
+
+            if( currGoal.pose.position.x == covered_goals_[i].pose.position.x && 
+                currGoal.pose.position.y == covered_goals_[i].pose.position.y) {
+
+                alreadyExsist = true;
+                break;
+            } 
+
+        }
+
+        if( !alreadyExsist){
+
+            covered_goals_.push_back(currGoal);
+        }
 
     }
 
@@ -1481,7 +1494,6 @@ public:
 
             string strState = getMoveBaseState(move_base_state);
 
-            cerr<<"strState:  "<<strState<<endl;
 
 
 
@@ -1493,11 +1505,14 @@ public:
             
             if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){                
 
+                cerr<<"strState:  "<<strState<<endl;
+
                 result = true;
                 break;
             }
             else
             {   
+                cerr<<"strState:  "<<strState<<endl;
 
                 result = false;
                 break;
@@ -1520,7 +1535,7 @@ public:
             // }
 
 
-            //addGoalNearbyCameraScan();
+            addGoalNearbyCameraScan();
 
             ros::spinOnce();
         }  
@@ -1549,7 +1564,8 @@ public:
 
                 if( distM < (robot_radius_meters_ ) ) {
 
-                    covered_goals_.push_back(goalFromPath);
+
+                    addRelevantGoalsToBlackList(goalFromPath);
                 }
 
             }
