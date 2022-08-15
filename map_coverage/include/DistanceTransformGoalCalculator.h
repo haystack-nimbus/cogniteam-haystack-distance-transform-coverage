@@ -35,7 +35,7 @@ public:
         if (goal.y < 0 || goal.x < 0 || goal.y > map.rows || goal.x > map.cols)
         {
 
-            cerr << "error goal out of map !! " << endl;
+            cerr << "error goal out of map !! " << goal<<endl;
             return false;
         }
         cv::Mat imgMap = map.clone();
@@ -77,7 +77,7 @@ public:
 
         if( !foundCont){
 
-            cerr<<" DistanceTransformGoalCalculator foundCont false"<<endl;
+            cerr<<" DistanceTransformGoalCalculator foundCont false"<<goal<<endl;
 
             return false;
         }

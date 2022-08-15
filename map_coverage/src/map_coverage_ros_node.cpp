@@ -1244,7 +1244,7 @@ public:
                     // calculate goal-distance-transform-map
                     cv::Mat distanceTransformImg;
 
-                    auto currentPosition = convertPoseToPix(robotPose_);
+                    auto currentPosition = convertPoseToPix(startingLocation_);
 
                     cerr<<" currentPosition "<<currentPosition<<endl;
 
@@ -1559,7 +1559,7 @@ public:
             // }
 
 
-            void addRelevantGoalsToBlackList();
+            //addRelevantGoalsToBlackList();
 
             ros::spinOnce();
         }  
