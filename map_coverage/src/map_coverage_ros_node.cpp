@@ -60,6 +60,7 @@
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 
+
 #include <vector>
 #include <iostream>
 #include <cmath>
@@ -189,7 +190,7 @@ public:
     MapCoverageManager()
     {
 
-        // cerr<<" wait for move-base server "<<endl;
+        cerr<<" wait for move-base server "<<endl;
         moveBaseController_.waitForServer(ros::Duration(10.0));
         ros::Duration(1).sleep();
         cerr << " exploration is now connecting with move-base !! " << endl;
@@ -218,8 +219,13 @@ public:
             node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1,
                                                      &MapCoverageManager::globalMapCallback, this);
 
-        camera_scan_sub_ = node_.subscribe("/scan_from_shallow_cloud", 1,
-                                                      &MapCoverageManager::cameraScanCallback, this);                                             
+          // subs
+        global_cost_map_sub_ =
+            node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
+                                                     &MapCoverageManager::globalCostMapCallback, this);                                             
+
+        // camera_scan_sub_ = node_.subscribe("/scan_from_shallow_cloud", 1,
+        //                                               &MapCoverageManager::cameraScanCallback, this);                                             
 
         // pubs
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
@@ -389,9 +395,47 @@ public:
         }
 
            
-    }    
+    }  
 
     
+
+    void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
+
+        cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+        memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
+
+        costMapImg.setTo(255, costMapImg!= 0);
+       
+        string global_costmap_frame = msg->header.frame_id;
+
+        for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
+
+            // transform to odom frame (global costmap framme)
+            cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
+                path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
+
+
+            auto poseInOdomFrame = transformFrames(p, global_costmap_frame ,globalFrame_ ,msg->header.stamp);
+
+            
+            float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
+            float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
+
+            cv::Point pOnImg = cv::Point(xPix, yPix);
+            
+            int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
+
+            if( costVal != 0 ){
+
+                path_poses_with_status_.setStatByIndex(i, true);
+
+            }
+
+
+        }
+
+
+    }   
        
 
     void globalMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
@@ -1375,11 +1419,7 @@ public:
             float distFromGoal = 
                      goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
                          cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y));
-
-
-
-            if( checkCameraObs)
-                addGoalNearbyCameraScan();
+            
 
             ros::spinOnce();
         }  
@@ -1467,6 +1507,8 @@ private:
 
     // subs
     ros::Subscriber global_map_sub_;
+
+    ros::Subscriber global_cost_map_sub_;
 
     ros::Subscriber camera_scan_sub_;
 
@@ -1591,6 +1633,8 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+
 
 
 // int main(int argc, char **argv)
