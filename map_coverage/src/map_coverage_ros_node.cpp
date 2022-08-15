@@ -1179,7 +1179,7 @@ public:
                         }
                         
 
-                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
+                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], true);
 
                         // set way[oint as checked
                         path_poses_with_status_.setStatByIndex(i, true );
@@ -1321,7 +1321,7 @@ public:
         return "";
     }  
 
-    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg)
+    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg, bool checkCameraObs = false)
     {      
 
         //navigate to the point			
@@ -1377,14 +1377,9 @@ public:
                          cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y));
 
 
-            // cerr<<" the duration is "<<duration<<" distFromGoal "<<distFromGoal<<endl;
-            //  cerr<<" the duration is "<<duration<<endl;
-            // if( duration > duration_wait_for_move_base_response_ /*&& distFromGoal < 1.0*/){ 
-            //     return true;
-            // }
 
-
-            addGoalNearbyCameraScan();
+            if( checkCameraObs)
+                addGoalNearbyCameraScan();
 
             ros::spinOnce();
         }  
