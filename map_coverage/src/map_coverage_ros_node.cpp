@@ -97,6 +97,29 @@ string startingTime_;
 bool exit_ = false;
 
 
+
+struct Path_with_Status
+{
+    vector<geometry_msgs::PoseStamped> coveragePathPoses_;
+
+    vector<bool> status_;
+
+    void initStatusList( ){
+
+        status_.resize(coveragePathPoses_.size());
+
+        for(int i = 0; i < status_.size(); i++ ){
+            status_[i] = false;
+        }
+    }
+
+    void setStatByIndex(int index, bool status) {
+
+        status_[index] = status;
+    }
+
+};
+
     
 
 string getCurrentTime(){ 
@@ -200,29 +223,18 @@ public:
 
         // pubs
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
-            "/coverage_path", 1, false);   
+            "/coverage_path", 1, false);  
 
-        safest_goal_marker_pub_  = node_.advertise<visualization_msgs::Marker>("/safest_goal", 10);  
+        waypoints_with_status_pub_ =
+            node_.advertise<visualization_msgs::MarkerArray>("/waypoints_with_status_marker_arr", 10);
 
         edges_frontires_marker_array_Pub =
             node_.advertise<visualization_msgs::MarkerArray>("/edges_frontiers_marker_arr", 10);
 
-        covered_goals_pub_ =
-            node_.advertise<visualization_msgs::MarkerArray>("/covered_goals", 10);
 
-        global_start_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/global_start", 10);
-
-        start_coverag_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/start_coverage", 10);
-
-        goal_coverag_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/goal_coverage", 10);
-
-        start_a_star_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/start_a_star", 10);
-
-        goal_a_star_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/goal_a_star", 10);
-
-        image_transport::ImageTransport it(node_);
-        coverage_map_pub_ = it.advertise("/coverage_map_img", 1);
-        nodePrivate.param("/coverage_map_img/compressed/jpeg_quality", 20);
+        // image_transport::ImageTransport it(node_);
+        // coverage_map_pub_ = it.advertise("/coverage_map_img", 1);
+        // nodePrivate.param("/coverage_map_img/compressed/jpeg_quality", 20);
 
         init_ = false;
 
@@ -377,141 +389,10 @@ public:
         }
 
            
-    }
+    }    
 
-    void publishStartConverage(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 1;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 1.0;
-        robotMarker.color.g = 0.0;
-        robotMarker.color.b = 0.0;
-
-        start_coverag_marker_pub_.publish(robotMarker);
-    }
-
-    void publishStartAstar(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 1;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 0.0;
-        robotMarker.color.g = 0.0;
-        robotMarker.color.b = 0.5;
-
-        start_a_star_marker_pub_.publish(robotMarker);
-    }
-
-    void publishSafestGoalMarker(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 1;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 0.2;
-        robotMarker.color.g = 0.8;
-        robotMarker.color.b = 1.0;
-        robotMarker.lifetime = ros::Duration(2000);
-
-       safest_goal_marker_pub_.publish(robotMarker);
-    }
-
-    void publishGlobalStartMarker(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 1;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 0.0;
-        robotMarker.color.g = 1.0;
-        robotMarker.color.b = 1.0;
-        robotMarker.lifetime = ros::Duration(0);
-
-        global_start_marker_pub_.publish(robotMarker);
-    }
-
-    void publishGoalAstar(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 1;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 0.0;
-        robotMarker.color.g = 0.0;
-        robotMarker.color.b = 1.0;
-
-        goal_a_star_marker_pub_.publish(robotMarker);
-    }
-
-    void publishGoalConverage(const geometry_msgs::PoseStamped &pose)
-    {
-
-        visualization_msgs::Marker robotMarker;
-        robotMarker.header.frame_id = globalFrame_;
-        robotMarker.header.stamp = ros::Time::now();
-        robotMarker.ns = "points_and_lines";
-        robotMarker.id = 111111;
-        robotMarker.action = visualization_msgs::Marker::ADD;
-        robotMarker.type = visualization_msgs::Marker::SPHERE;
-        robotMarker.pose.position = pose.pose.position;
-        robotMarker.scale.x = 0.3;
-        robotMarker.scale.y = 0.3;
-        robotMarker.scale.z = 0.3;
-        robotMarker.color.a = 1.0;
-        robotMarker.color.r = 0.0;
-        robotMarker.color.g = 1.0;
-        robotMarker.color.b = 0.0;
-
-        goal_coverag_marker_pub_.publish(robotMarker);
-    }
+    
+       
 
     void globalMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
     {
@@ -675,43 +556,55 @@ public:
         edges_frontires_marker_array_Pub.publish(Markerarr);
     }
 
-    void publishCoveredGoals()
-    {
+
+    void publishWaypointsWithStatus() {
 
         visualization_msgs::MarkerArray Markerarr;
+        int count = 1;
 
-        for (int i = 0; i < covered_goals_.size(); i++)
+        for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
         {
+                visualization_msgs::Marker m;
+                m.header.frame_id = globalFrame_;
+                m.header.stamp = ros::Time::now();
+                m.ns = "points_and_lines";
+                m.id =  count + i;
+                m.action = visualization_msgs::Marker::ADD;
+                m.type = visualization_msgs::Marker::SPHERE;
+                m.pose.position.x = path_poses_with_status_.coveragePathPoses_[i].pose.position.x;
+                m.pose.position.y = path_poses_with_status_.coveragePathPoses_[i].pose.position.y;
+                m.pose.position.z = 0;
+                m.pose.orientation.x = 0;
+                m.pose.orientation.y = 0;
+                m.pose.orientation.z = 0;
+                m.pose.orientation.w = 1.0;
+                m.scale.x = 0.1;
+                m.scale.y = 0.1;
+                m.scale.z = 0.1;
+                m.color.a = 1.0;
 
-            geometry_msgs::PoseStamped p = covered_goals_[i];
+                //checked
+                if( path_poses_with_status_.status_[i]){
 
-            visualization_msgs::Marker pOnEgge;
-            pOnEgge.header.frame_id = globalFrame_;
-            pOnEgge.header.stamp = ros::Time::now();
-            pOnEgge.ns = "points_and_lines";
-            pOnEgge.id = 99999 + 1;
-            pOnEgge.action = visualization_msgs::Marker::ADD;
-            pOnEgge.type = visualization_msgs::Marker::SPHERE;
-            pOnEgge.pose.position.x = p.pose.position.x;
-            pOnEgge.pose.position.y = p.pose.position.y;
-            pOnEgge.pose.position.z = 0;
-            pOnEgge.pose.orientation.x = 0;
-            pOnEgge.pose.orientation.y = 0;
-            pOnEgge.pose.orientation.z = 0;
-            pOnEgge.pose.orientation.w = 1.0;
-            pOnEgge.scale.x = 0.2;
-            pOnEgge.scale.y = 0.2;
-            pOnEgge.scale.z = 0.2;
-            pOnEgge.color.a = 1.0;
-            pOnEgge.color.r = 1;
-            pOnEgge.color.g = 0.0;
-            pOnEgge.color.b = 0;
+                    m.color.r = 0;
+                    m.color.g = 1.0;
+                    m.color.b = 0.0;
+                } else {
 
-            Markerarr.markers.push_back(pOnEgge);
+                    m.color.r = 1.0;
+                    m.color.g = 0.0;
+                    m.color.b = 0.0;
+                }
+               
+
+                Markerarr.markers.push_back(m);
         }
 
-        covered_goals_pub_.publish(Markerarr);
+        waypoints_with_status_pub_.publish(Markerarr);
+        
     }
+
+   
 
 
     cv::Point convertPoseToPix(const geometry_msgs::PoseStamped &pose)
@@ -1125,9 +1018,6 @@ public:
 
                     safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
 
-                    publishSafestGoalMarker(convertPixToPose(safestGoal, robotPose_.pose.orientation));
-
-
                     cerr<<"exploration: safestGoal "<<safestGoal<<endl;
                     
                     auto safestGoalPose = convertPixToPose(safestGoal, robotPose_.pose.orientation);
@@ -1166,10 +1056,9 @@ public:
 
                     geometry_msgs::Quaternion q;
                     q.w = 1;
-                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);                                   
+                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);                               
 
                     
-                    publishSafestGoalMarker(nextFrontierGoal);
                     publishEdgesFrontiers(currentEdgesFrontiers);
 
                     bool result = sendGoal(nextFrontierGoal);
@@ -1269,35 +1158,33 @@ public:
 
 
                     // convert the path into poses
-                    coveragePathPoses_ = covertPointsPathToPoseRout(path_);
+                    path_poses_with_status_.coveragePathPoses_ = covertPointsPathToPoseRout(path_);
+                    path_poses_with_status_.initStatusList();
 
                     // exectute currnet navigation the blob-coverage
-                    cerr << " num of coverage waypoints " << coveragePathPoses_.size() << endl;
-                    for (int i = 0; i < coveragePathPoses_.size(); i++)
+                    cerr << " num of coverage waypoints " << path_poses_with_status_.coveragePathPoses_.size() << endl;
+                    for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
                     {   
 
-                        percentCoverage_ = ( float(i) / float(coveragePathPoses_.size()))  * 100.0;
+                        percentCoverage_ = ( float(i) / float(path_poses_with_status_.coveragePathPoses_.size()))  * 100.0;
                         node_.setParam("/coverage/percentage", percentCoverage_);    
-
-
-                        publishCoverageImgMap();
                         
-                        publishCoveragePath(coveragePathPoses_);
+                        publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
 
-                        publishCoveredGoals();
+                        publishWaypointsWithStatus();
 
-                        //the goal in the black list (covered goals)
-                        if( checkIfGoalInsideBlackList(coveragePathPoses_[i])){
-
-                            cerr<<" inside black list "<<endl;
+                        // the waypoint is checked
+                        if( path_poses_with_status_.status_[i] == true ){
                             continue;
                         }
                         
 
-                        bool result = sendGoal(coveragePathPoses_[i]);
+                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
+
+                        // set way[oint as checked
+                        path_poses_with_status_.setStatByIndex(i, true );
 
 
-                        addRelevantGoalsToBlackList(coveragePathPoses_[i]);
 
                         if( exit_){
 
@@ -1325,7 +1212,6 @@ public:
                     cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
                     cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
 
-                    publishSafestGoalMarker(startingLocation_);
 
                     bool result = sendGoal(startingLocation_);
 
@@ -1382,46 +1268,9 @@ public:
         }
 
        
-    } 
+    }   
 
-    bool checkIfGoalInsideBlackList( const geometry_msgs::PoseStamped& currGoal ){
-
-        for(int i = 0; i < covered_goals_.size(); i++ ){
-
-            auto goalFromPath = covered_goals_[i];
-
-            float distM = 
-                goalCalculator.distanceCalculate( cv::Point2d(currGoal.pose.position.x, currGoal.pose.position.y),
-                    cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y));
-
-            if (distM < 0.3)
-                return true;
-        }
-
-        return false;
-
-    }
-
-    void addRelevantGoalsToBlackList(const geometry_msgs::PoseStamped& currGoal){
-
-        bool alreadyExsist = false;
-        for( int i = 0; i < covered_goals_.size(); i++){
-
-            if( currGoal.pose.position.x == covered_goals_[i].pose.position.x && 
-                currGoal.pose.position.y == covered_goals_[i].pose.position.y) {
-
-                alreadyExsist = true;
-                break;
-            } 
-
-        }
-
-        if( !alreadyExsist){
-
-            covered_goals_.push_back(currGoal);
-        }
-
-    }
+   
 
     string getMoveBaseState(actionlib::SimpleClientGoalState state) {
         
@@ -1548,15 +1397,13 @@ public:
 
     void addGoalNearbyCameraScan() {
 
+        for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
-        for (int i = 0; i < coveragePathPoses_.size(); i++) {
-
-            auto goalFromPath = coveragePathPoses_[i];
+            auto goalFromPath = path_poses_with_status_.coveragePathPoses_[i];
 
             for( int j = 0; j < currentCameraScanMapPointsM_.size(); j++ ) { 
 
-
-                auto pCameraScanOnMap = currentCameraScanMapPointsM_[i];
+                auto pCameraScanOnMap = currentCameraScanMapPointsM_[j];
 
                 float distM = 
                     goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
@@ -1564,8 +1411,7 @@ public:
 
                 if( distM < (robot_radius_meters_ ) ) {
 
-
-                    addRelevantGoalsToBlackList(goalFromPath);
+                    path_poses_with_status_.setStatByIndex(i, true);
                 }
 
             }
@@ -1624,9 +1470,6 @@ private:
     // move-base
     MoveBaseController moveBaseController_;
 
-    vector<geometry_msgs::PoseStamped> coveragePathPoses_;
-    vector<cv::Point> path_;
-
     // subs
     ros::Subscriber global_map_sub_;
 
@@ -1636,23 +1479,14 @@ private:
 
     ros::Publisher cuurentCoveragePathPub_;
 
-    ros::Publisher start_coverag_marker_pub_;
-
-    ros::Publisher goal_coverag_marker_pub_;
-
     ros::Publisher edges_frontires_marker_array_Pub;
 
-    ros::Publisher covered_goals_pub_;
-
-    ros::Publisher start_a_star_marker_pub_;
-
-    ros::Publisher safest_goal_marker_pub_;
-
-    ros::Publisher goal_a_star_marker_pub_;
-
-    ros::Publisher global_start_marker_pub_;
+    ros::Publisher waypoints_with_status_pub_;
 
     image_transport::Publisher  coverage_map_pub_;
+
+
+    //classes 
 
     DistanceTransformGoalCalculator distanceTransformGoalCalculator;
     DisantanceMapCoverage disantanceMapCoverage;
@@ -1670,7 +1504,10 @@ private:
 
     cv::Mat currentAlgoMap_;
 
-    vector<geometry_msgs::PoseStamped> covered_goals_;
+
+    Path_with_Status path_poses_with_status_;
+    vector<cv::Point> path_; // for display on image
+
 
     ros::NodeHandle node_;
 

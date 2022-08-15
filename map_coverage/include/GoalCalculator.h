@@ -464,7 +464,18 @@ public:
             
             Frontier f;
             f.contour =  contours[i];
-            f.center = contours[i][contours[i].size() / 2 ];
+
+            f.center.x = 0;
+            f.center.y = 0;
+            for(int k = 0; k < contours[i].size(); k++ ){
+
+                f.center.x += contours[i][k].x;
+                f.center.y += contours[i][k].y;
+            }
+
+            f.center.x = (float)f.center.x / (float)contours[i].size();
+            f.center.y = (float)f.center.y / (float)contours[i].size();
+
             f.distFromPosition =   distanceCalculate(f.center, robotPix);
 
             currentEdgesFrontiers.push_back(f);
