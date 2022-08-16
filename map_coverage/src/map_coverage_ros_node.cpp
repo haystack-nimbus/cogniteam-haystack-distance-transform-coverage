@@ -109,7 +109,12 @@ struct Path_with_Status
 
         status_.resize(coveragePathPoses_.size());
 
-        setStatByIndex(i, false);
+        for( int i = 0; i < status_.size(); i++){
+
+            setStatByIndex(i, false);
+
+        }
+
     }
 
     void setStatByIndex(int index, bool status) {
