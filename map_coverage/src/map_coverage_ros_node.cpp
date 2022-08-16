@@ -444,7 +444,8 @@ public:
                     if( pMapImg.y > 0 && pMapImg.y < costMapImgOnFrameMap.rows &&
                         
                         pMapImg.x > 0 && pMapImg.x < costMapImgOnFrameMap.cols ){
-                            costMapImgOnFrameMap.at<uchar>(pMapImg.y , pMapImg.x) = 255;
+                        circle(costMapImgOnFrameMap, pMapImg,  1, Scalar(255), -1, 8, 0);
+
 
                     }
                     
@@ -460,6 +461,8 @@ public:
 
                 auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
 
+                cerr<<i<<" pixOnMap "<<pixOnMap<<endl;
+
                 if  ( costMapImgOnFrameMap.at<uchar>(pixOnMap.y , pixOnMap.x) == 255) {
 
                     path_poses_with_status_.setStatByIndex(i, true);
@@ -473,9 +476,9 @@ public:
 
 
             }
+            cerr<<"--------------------------------------- "<<endl;
 
             imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
-            ccc++;
 
 
             // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
