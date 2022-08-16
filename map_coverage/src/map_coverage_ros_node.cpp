@@ -400,7 +400,7 @@ public:
     }  
 
     
-
+    int ccc = 0;
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
         if( init_ ) {
@@ -452,8 +452,10 @@ public:
                 }
             }
 
-            imwrite("costMaponMap.png", costMapImgOnFrameMap);
+            Mat dbg = costMapImgOnFrameMap.clone();
+            cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
+          
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
                 auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
@@ -462,10 +464,18 @@ public:
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
+                    circle(dbg, pixOnMap,  2, Scalar(0, 255, 0), -1, 8, 0);
+
+                } else {
+
+                    circle(dbg, pixOnMap,  2, Scalar(0, 0, 255), -1, 8, 0);
                 }
 
 
             }
+
+            imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            ccc++;
 
 
             // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
