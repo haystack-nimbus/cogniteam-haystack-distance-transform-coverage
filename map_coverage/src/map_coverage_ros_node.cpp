@@ -422,7 +422,7 @@ public:
                     path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
 
 
-                auto poseInOdomFrame = transformFrames(p, global_costmap_frame ,globalFrame_ ,msg->header.stamp);
+                auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
 
                 
                 float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
@@ -432,17 +432,15 @@ public:
                 
                 int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
 
-                if( costVal != 0 ){
+                if( costVal == 255 ){
                     
                     cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
-                } else {
+                } else if( costVal == 0 ){{
 
                     cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
-
-                    path_poses_with_status_.setStatByIndex(i, false);
 
 
                 }
