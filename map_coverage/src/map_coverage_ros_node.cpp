@@ -405,7 +405,7 @@ public:
 
         cerr<<"11111111111111111111111111 inside globalCostMapCallback "<<endl;
 
-        if( init_ ){
+        if( init_ ) {
 
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
@@ -438,7 +438,7 @@ public:
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
-                } else if( costVal == 0 ){{
+                } else if( costVal == 0 ){
 
                     cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
