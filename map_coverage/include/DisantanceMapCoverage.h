@@ -37,11 +37,11 @@ public:
   
   void setRobotWidthPix(float robotWidthPix){
 
-    robotWidthPix_ = robotWidthPix * 2;
+    robotWidthPix_ = robotWidthPix * 1.5;
   }
   void setRobotHeightPix(float robotHeightPix){
 
-    robotHeightPix_ = robotHeightPix * 2;
+    robotHeightPix_ = robotHeightPix * 1.5;
   }
     
   double getWantedCoverArea(const cv::Mat& imgMap, const cv::Point& start, double dist_between_points)
@@ -94,6 +94,7 @@ public:
                                     cv::Mat& distanceTransformImg, double dist_between_points,
                                     float wanted_coverage_score)
   {
+    
     cv::Mat visitedCells(distanceTransformImg.rows, distanceTransformImg.cols, CV_8UC1, cv::Scalar(NOT_VISITED));
 
     vector<cv::Point> path;
@@ -110,16 +111,19 @@ public:
     cv::Mat grayScaleImg = imgMap.clone();
     cvtColor(grayScaleImg, grayScaleImg, COLOR_GRAY2BGR);
 
-    cv::Point currentP(start.x, start.y);
+    Mat dbg = imgMap.clone();
+    cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
-    std::map<string, cv::Point> son_father;
+
+    cv::Point currentP(start.x, start.y);
 
     do
     {
       if (path.size() > 0 && debug_)
       {
-        cv::line(grayScaleImg, currentP, path[path.size() - 1], Scalar(255, 255, 0), 2);
+       cv::line(grayScaleImg, currentP, path[path.size() - 1], Scalar(255, 255, 0), 2);
       }
+
 
       if (debug_)
         circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(255, 0, 255), -1, 8, 0);
@@ -129,9 +133,9 @@ public:
       bool foundN = findNeighborCell(distanceTransformImg, visitedCells, currentP, NeighborCell, grayScaleImg,
                                      dist_between_points);
 
-      float totalCoverSoFar = float((son_father.size() * dist_between_points)) / float(wantedCoverArea);
+      float totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
 
-      cerr << " totalCoverSoFar" << totalCoverSoFar << " son_father.size() " << son_father.size() << endl;
+      cerr << "seenButNotVisited_ size " << seenButNotVisited_.size() << endl;
 
       if (totalCoverSoFar > wanted_coverage_score)
       {
@@ -141,46 +145,91 @@ public:
       // if not found
       if (!foundN)
       { 
-
-        //////////////////////////////////////////
-        // cv::Rect r(currentP.x - (robotWidthPix_ / 2), currentP.y - (robotHeightPix_ / 2), 
-        //     robotWidthPix_, robotHeightPix_);
-        // cv::rectangle(grayScaleImg, r, Scalar(0, 0, 255), 0.5);
-        //////////////////////////////////////////
-
+        cerr<<" not foundN "<<endl;
+        
         path.push_back(currentP);
+
+        if( seenButNotVisited_.count(getPointString(currentP))){
+
+           cerr<<" erase 1 "<<endl;
+
+            seenButNotVisited_.erase(getPointString(currentP));
+        }
 
         visitedCells.at<uchar>(currentP.y, currentP.x) = VISITED;
 
-        string pString = getPointString(currentP);
-        if (son_father.find(pString) == son_father.end())
-        {
-          cerr << "reached to start again " << endl;
-          break;
+
+        if( seenButNotVisited_.size() > 0) {
+            
+
+            cerr<<" 11111111111111111111111 "<<endl;
+            float minDist = 99999;
+
+            cv::Point closestPoint;
+            string key = "";
+
+            for (auto it = seenButNotVisited_.begin(); it != seenButNotVisited_.end(); ++it){
+                
+                float  distFromGreenP = distanceCalculate(currentP,  it->second);
+
+                if( distFromGreenP < minDist){
+
+                    closestPoint = it->second;
+                    key = it->first;
+                    minDist= distFromGreenP;
+                }
+
+            }
+            
+            seenButNotVisited_.erase(key);
+
+            cv::line(grayScaleImg, currentP, closestPoint, Scalar(0, 100, 50), 2);
+
+
+            currentP = closestPoint;
+
+            cerr<<" the p will be "<<currentP<<endl;
+            continue;
+
+
+        } else {
+
+
+            break;
+            // string pString = getPointString(currentP);
+            // if (son_father_.find(pString) == son_father_.end())
+            // {
+            //     cerr << "reached to start again " << endl;
+            //     break;
+            // }
+            // cv::Point father = son_father_.at(pString);
+
+            // // cerr<<"go to father "<<father<<endl;
+            // NeighborCell = father;
+            // currentP = father;
+
+            // if (debug_)
+            // {
+            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
+            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[1] = 255;
+            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[2] = 0;
+
+            //     circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(0, 100, 255), -1, 8, 0);
+            // }
+            // if (debug_)
+            // {
+            //     imshow("grayScaleImg", grayScaleImg);
+            //     waitKey(0);
+            // }
+
+            // continue;
         }
-        cv::Point father = son_father.at(pString);
 
-        // cerr<<"go to father "<<father<<endl;
-        NeighborCell = father;
-        currentP = father;
-
-        if (debug_)
-        {
-          grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
-          grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[1] = 255;
-          grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[2] = 0;
-
-          circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(0, 100, 255), -1, 8, 0);
-        }
-        if (debug_)
-        {
-          imshow("grayScaleImg", grayScaleImg);
-          waitKey(0);
-        }
-
-        continue;
+       
       }
+      
 
+      cerr<<" foundN "<<endl;
       if (debug_)
       {
         grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
@@ -212,7 +261,13 @@ public:
 
         path.push_back(currentP);
 
-        son_father[getPointString(NeighborCell)] = currentP;
+        if( seenButNotVisited_.find(getPointString(currentP)) != seenButNotVisited_.end()){
+
+            cerr<<" erase 3 "<<endl; 
+            seenButNotVisited_.erase(getPointString(currentP));
+        }
+
+        son_father_[getPointString(NeighborCell)] = currentP;
 
         currentP = NeighborCell;
       }
@@ -238,7 +293,14 @@ public:
 
         path.push_back(currentP);
 
-        son_father[getPointString(NeighborCell)] = currentP;
+        if( seenButNotVisited_.count(getPointString(currentP))){
+
+            
+            cerr<<" erase 2 "<<endl;
+            seenButNotVisited_.erase(getPointString(currentP));
+        }
+
+        son_father_[getPointString(NeighborCell)] = currentP;
 
         currentP = NeighborCell;
       }
@@ -253,6 +315,18 @@ public:
 
     } while (true);
 
+
+    // for(int i = 0; i < path.size() - 1; i++ ){
+
+    //     cv::line(dbg, path[i],  path[i + 1], Scalar(255, 255, 0), 2);
+
+    //     imshow("dbg",dbg);
+    //     waitKey(0);
+
+
+    // }
+
+ 
     return path;
   }
 
@@ -368,7 +442,15 @@ private:
         }
         else
         {
-          circle(grayScaleImg, neighboar, 0.5, Scalar(0, 255, 0), -1, 8, 0);
+          //green
+
+          if( ! son_father_.count(getPointString(neighboar))){
+
+            circle(grayScaleImg, neighboar, 4 , Scalar(0, 255, 0), -1, 8, 0);
+
+            seenButNotVisited_[getPointString(neighboar)] = neighboar;
+          }
+         
         }
       }
     }
@@ -377,11 +459,13 @@ private:
       validCells[direction] = false;
       visitedCellsNe[direction] = true;
     }
+
   }
 
   bool findNeighborCell(const Mat& distanceTransform, const Mat& visitedCells, const cv::Point& currentP,
                         cv::Point& NeighborCell, cv::Mat& grayScaleImg, int dist_between_points)
   {
+    // the Neighbors
     cv::Point up(currentP.x, currentP.y - dist_between_points);
     cv::Point down(currentP.x, currentP.y + dist_between_points);
 
@@ -406,9 +490,7 @@ private:
     ne[DOWN_LEFT] = downLeft;
 
     vector<bool> visitedCellsNe{ true, true, true, true, true, true, true, true };
-
     vector<bool> validCells{ false, false, false, false, false, false, false, false };
-
     vector<int> scores{ 0, 0, 0, 0, 0, 0, 0, 0 };
 
     //  UP, DOWN, LEFT, RIGHT, TOP_RIGHT, TOP_LEFT, DOWN_RIGHT, DOWN_LEFT
@@ -474,6 +556,12 @@ private:
   float robotWidthPix_ = 0.0;
 
   float robotHeightPix_ = 0.0;
+
+  std::map<string, cv::Point> seenButNotVisited_;
+
+  std::map<string, cv::Point> son_father_;
+
+
 
 };
 

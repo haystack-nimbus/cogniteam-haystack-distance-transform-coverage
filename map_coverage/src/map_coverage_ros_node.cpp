@@ -1790,20 +1790,24 @@ int main(int argc, char **argv)
 //     float robotWidthPix = (1.0 / mapResolution_) * robotWidthM;
 //     float robotHeightPix = (1.0 / mapResolution_) * robotHeightM;
 
-//     DisantanceMapCoverage disantanceMapCoverage(true, robotWidthPix, robotHeightPix );
+//     DisantanceMapCoverage disantanceMapCoverage(true);
 //     GoalCalculator goalCalculator;
+
+//     disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
+//     disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
+
 
     
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
-//     float robot_radius_meters_ = 0.2;
+//     float robot_radius_meters_ = 0.3;
 
 //     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/data/1/map.pgm",0);
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
   
    
-//     //addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
-//     //addFreeSpaceDilation(currentAlgoMap_);
+//     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
+//     addFreeSpaceDilation(currentAlgoMap_);
 
 //     if( false) {
         
@@ -1825,9 +1829,13 @@ int main(int argc, char **argv)
 
 //     if( true) {
 
+
+        
 //         cv::Mat distanceTransformImg;
 
 //         cv::Point2d currentPosition(380, 207);
+//         //cv::Point2d currentPosition(468, 279);
+
 //         cv::Point2d goal = currentPosition;
 //         // // calc the distance-transform-img from current goal
 //         if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
@@ -1841,7 +1849,7 @@ int main(int argc, char **argv)
 //         Mat grayDistImg;
 //         distanceTransformGoalCalculator.normalizeDistanceTransform(distanceTransformImg, grayDistImg);
 
-
+      
 //         Mat dbg = mappingMap.clone();
 //         cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
