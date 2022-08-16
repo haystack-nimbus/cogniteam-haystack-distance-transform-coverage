@@ -479,6 +479,8 @@ public:
             cerr<<"--------------------------------------- "<<endl;
 
             imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
+
 
 
             // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
