@@ -109,9 +109,7 @@ struct Path_with_Status
 
         status_.resize(coveragePathPoses_.size());
 
-        for(int i = 0; i < status_.size(); i++ ){
-            status_[i] = false;
-        }
+        setStatByIndex(i, false);
     }
 
     void setStatByIndex(int index, bool status) {
@@ -429,14 +427,17 @@ public:
                 
                 int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
 
-                cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
                 if( costVal != 0 ){
+                    
+                    cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
                 } else {
 
                     cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
+                    path_poses_with_status_.setStatByIndex(i, false);
 
 
                 }
