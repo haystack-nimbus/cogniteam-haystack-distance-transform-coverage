@@ -415,8 +415,8 @@ public:
 
             string global_costmap_frame = msg->header.frame_id;
 
-            Mat dbg = costMapImg.clone();
-            cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+            // Mat dbg = costMapImg.clone();
+            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
@@ -442,16 +442,14 @@ public:
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
-                    circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
+                    // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
 
                 } else if( costVal == 0 ){
 
                     cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
-                    circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
-
-
+                    // circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
                 }
             }
 
@@ -666,7 +664,7 @@ public:
                     m.color.r = 0;
                     m.color.g = 0.0;
                     m.color.b = 0.0;
-                    
+
                 } else {
 
                     m.color.r = 0.0;
