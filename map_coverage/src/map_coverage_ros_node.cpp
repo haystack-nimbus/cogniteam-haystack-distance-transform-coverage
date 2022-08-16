@@ -215,7 +215,10 @@ public:
         nodePrivate.param("/coverage/percentage", percentCoverage_, 0.0);    
         nodePrivate.param("/coverage/state", state_, string("INITIALIZING"));
         nodePrivate.param("/coverage/image_name", image_name_, string(""));        
-       
+
+
+        radius_for_cleaning_route_goals_ = distBetweenGoalsM_ / 2.0;
+
 
         // subs
         global_map_sub_ =
@@ -246,6 +249,9 @@ public:
 
         init_ = false;
 
+        // global cost map
+        startGoblalCostMap_ = high_resolution_clock::now();
+
         /// params
         mapResolution_ = -1;
         map_origin_position_x = -1;
@@ -254,10 +260,9 @@ public:
         startingCoverageTime_ = high_resolution_clock::now();
 
 
-        float robotWidthM = 0.53;
-        float robotHeightM = 0.53;
-        float robotWidthPix = (1.0 / mapResolution_) * robotWidthM;
-        float robotHeightPix = (1.0 / mapResolution_) * robotHeightM;
+     
+        float robotWidthPix = (1.0 / mapResolution_) * robotWidthM_;
+        float robotHeightPix = (1.0 / mapResolution_) * robotHeightM_;
 
         DisantanceMapCoverage disantanceMapCoverage(true);
         disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
@@ -400,10 +405,15 @@ public:
     }  
 
     
-    int ccc = 0;
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
-        if( init_ ) {
+        auto endGoblalCostMap = high_resolution_clock::now();
+        auto durationFromLastCalc = duration_cast<seconds>(endGoblalCostMap - startGoblalCostMap_).count();
+
+
+        if( init_ && durationFromLastCalc > 1.0) {
+
+            cerr<<" inisde calc "<<endl; 
 
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
@@ -438,7 +448,6 @@ public:
 
                 if( costVal == 255 ){
                     
-                    cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
@@ -447,21 +456,21 @@ public:
 
                 } else if( costVal == 0 ){
 
-                    cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
                     // circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
                 }
             }
 
             // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
-            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
-
-          
+            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
             
+            startGoblalCostMap_ = endGoblalCostMap;
+
 
 
         }
-        
+
+
 
 
 
@@ -1217,7 +1226,7 @@ public:
                 continue;
             }  
 
-          
+            
 
             switch (coverage_state_)
             {   
@@ -1270,10 +1279,13 @@ public:
 
                     // exectute currnet navigation the blob-coverage
                     cerr << " num of coverage waypoints " << path_poses_with_status_.coveragePathPoses_.size() << endl;
+                    
                     for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
                     {   
 
                         ros::spinOnce();
+
+                        updateRobotLocation();
 
 
                         percentCoverage_ = ( float(i) / float(path_poses_with_status_.coveragePathPoses_.size()))  * 100.0;
@@ -1283,19 +1295,16 @@ public:
 
                         publishWaypointsWithStatus();
 
-                        // the waypoint is checked
+                        // the waypoint is checked (black)
                         if( path_poses_with_status_.status_[i] == true ){
                             continue;
                         }
-
-
                         
 
                         bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], true);
 
                         // set way[oint as checked
                         path_poses_with_status_.setStatByIndex(i, true );
-
 
 
                         if( exit_){
@@ -1392,6 +1401,27 @@ public:
        
     }   
 
+    void removeGoalsByRobotRout() {
+
+        for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
+
+            if( path_poses_with_status_.status_[i] == true ){
+                continue;
+            }
+
+            float distRobotFromGoal = 
+                     goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+                         cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                             path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
+           
+           if ( distRobotFromGoal < radius_for_cleaning_route_goals_) {
+              
+                path_poses_with_status_.setStatByIndex(i, true);
+           }
+
+        }
+    }
+
    
 
     string getMoveBaseState(actionlib::SimpleClientGoalState state) {
@@ -1455,6 +1485,8 @@ public:
 
             ros::spinOnce();
 
+            removeGoalsByRobotRout();
+
             if( exit_){
 
                 return true;
@@ -1494,12 +1526,7 @@ public:
             auto end = ros::WallTime::now();
             auto duration = (end - start).toSec();
 
-            updateRobotLocation();
-
-            float distFromGoal = 
-                     goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
-                         cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y));
-            
+          
 
             ros::spinOnce();
         }  
@@ -1668,8 +1695,11 @@ private:
 
     bool reducing_goals_ = true;
 
-
+    float robotWidthM_ = 0.53;
+    float robotHeightM_ = 0.53;
     double robot_radius_meters_ = 0.3;
+
+    double radius_for_cleaning_route_goals_ = 0.3;
 
     double wanted_coverage_score_ = 0.95;
 
@@ -1691,6 +1721,9 @@ private:
     bool errCoverage_ = false;
 
     high_resolution_clock::time_point startingCoverageTime_;
+
+    high_resolution_clock::time_point startGoblalCostMap_;
+
 
 };
 
