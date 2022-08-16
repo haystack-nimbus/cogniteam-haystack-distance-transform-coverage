@@ -224,8 +224,7 @@ public:
             node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
                                                      &MapCoverageManager::globalCostMapCallback, this);                                             
 
-        // camera_scan_sub_ = node_.subscribe("/scan_from_shallow_cloud", 1,
-        //                                               &MapCoverageManager::cameraScanCallback, this);                                             
+                                                 
 
         // pubs
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
@@ -401,48 +400,53 @@ public:
 
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
-        cerr<<" inside globalCostMapCallback "<<endl;
 
-        cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
-        memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
+        if( init_ ){
 
-        costMapImg.setTo(255, costMapImg!= 0);
-       
-        string global_costmap_frame = msg->header.frame_id;
+            cerr<<"11111111111111111111111111 inside globalCostMapCallback "<<endl;
 
-        for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
+            cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+            memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
-            // transform to odom frame (global costmap framme)
-            cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
-                path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
+            costMapImg.setTo(255, costMapImg!= 0);
+        
+            string global_costmap_frame = msg->header.frame_id;
+
+            for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
+
+                // transform to odom frame (global costmap framme)
+                cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
+                    path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
 
 
-            auto poseInOdomFrame = transformFrames(p, global_costmap_frame ,globalFrame_ ,msg->header.stamp);
+                auto poseInOdomFrame = transformFrames(p, global_costmap_frame ,globalFrame_ ,msg->header.stamp);
 
-            
-            float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
-            float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
+                
+                float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
+                float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
 
-            cv::Point pOnImg = cv::Point(xPix, yPix);
-            
-            int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
+                cv::Point pOnImg = cv::Point(xPix, yPix);
+                
+                int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
 
-            cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
-            if( costVal != 0 ){
+                cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+                if( costVal != 0 ){
 
-                path_poses_with_status_.setStatByIndex(i, true);
+                    path_poses_with_status_.setStatByIndex(i, true);
 
-            } else {
+                } else {
 
-                cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+                    cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
+
+                }
 
 
             }
 
 
         }
-
-        publishWaypointsWithStatus();
+        
 
 
 
@@ -1194,7 +1198,10 @@ public:
             {
 
                 continue;
-            }            
+            }  
+
+            publishWaypointsWithStatus();
+          
 
             switch (coverage_state_)
             {   
