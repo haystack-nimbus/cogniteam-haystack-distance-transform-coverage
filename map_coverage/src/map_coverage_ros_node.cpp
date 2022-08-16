@@ -214,10 +214,7 @@ public:
 
         nodePrivate.param("/coverage/percentage", percentCoverage_, 0.0);    
         nodePrivate.param("/coverage/state", state_, string("INITIALIZING"));
-        nodePrivate.param("/coverage/image_name", image_name_, string(""));        
-
-
-        radius_for_cleaning_route_goals_ = distBetweenGoalsM_ / 2.0;
+        nodePrivate.param("/coverage/image_name", image_name_, string("")); 
 
 
         // subs
@@ -234,7 +231,10 @@ public:
 
         // pubs
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
-            "/coverage_path", 1, false);  
+            "/coverage_path", 1, false); 
+
+        robot_history_path_pub_ = node_.advertise<nav_msgs::Path>(
+            "/robot_history_path", 1, false);      
 
         waypoints_with_status_pub_ =
             node_.advertise<visualization_msgs::MarkerArray>("/waypoints_with_status_marker_arr", 10);
@@ -268,6 +268,10 @@ public:
         disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
         disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
 
+        nav_msgs::Path robotHistoryPathMsg_;
+        robotHistoryPathMsg_.header.frame_id = globalFrame_;
+       
+
     }
 
     ~MapCoverageManager() {
@@ -291,6 +295,13 @@ public:
 
 
     } 
+
+
+    void publishRobotHistoryPath() {
+
+        robotHistoryPathMsg_.header.stamp = ros::Time::now();
+        robot_history_path_pub_.publish(robotHistoryPathMsg_);
+    }
 
     void cameraScanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
     {
@@ -413,9 +424,6 @@ public:
 
         if( init_ && durationFromLastCalc > 1.0) {
 
-            cerr<<" inisde calc "<<endl; 
-
-
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
@@ -517,6 +525,8 @@ public:
 
         init_ = true;
 
+       
+
 
         currentGlobalMap_ = occupancyGridMatToGrayScale(tmp.clone());
 
@@ -576,6 +586,9 @@ public:
             robotPose_.pose.orientation.y = transform.getRotation().y();
             robotPose_.pose.orientation.z = transform.getRotation().z();
             robotPose_.pose.orientation.w = transform.getRotation().w();
+
+            robotHistoryPathMsg_.poses.push_back(robotPose_);
+
 
             return true;
         }
@@ -1295,6 +1308,8 @@ public:
 
                         publishWaypointsWithStatus();
 
+                        publishRobotHistoryPath();
+
                         // the waypoint is checked (black)
                         if( path_poses_with_status_.status_[i] == true ){
                             continue;
@@ -1485,7 +1500,11 @@ public:
 
             ros::spinOnce();
 
+            updateRobotLocation();
+
             removeGoalsByRobotRout();
+
+            publishRobotHistoryPath();
 
             if( exit_){
 
@@ -1629,6 +1648,10 @@ private:
 
     image_transport::Publisher  coverage_map_pub_;
 
+    ros::Publisher robot_history_path_pub_;
+    nav_msgs::Path robotHistoryPathMsg_;
+
+
 
     //classes 
 
@@ -1651,6 +1674,9 @@ private:
 
     Path_with_Status path_poses_with_status_;
     vector<cv::Point> path_; // for display on image
+
+     
+
 
 
     ros::NodeHandle node_;
