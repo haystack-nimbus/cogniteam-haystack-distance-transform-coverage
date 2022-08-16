@@ -1103,13 +1103,13 @@ public:
                     safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
 
                     float distSafestFromRoboctPoseM = 
-                            (mapResolution_) * (goalCalculator.distanceCalculate( safestGoal, globalStart_) );    
+                            (mapResolution_) * goalCalculator.distanceCalculate( safestGoal, globalStart_);    
 
-                    cerr<<" distSafestFromRobotPoseM "<<distSafestFromRobotPoseM<<endl;
+                    cerr<<" distSafestFromRoboctPoseM "<<distSafestFromRoboctPoseM<<endl;
                     // it the robot close to the safest (under 2 meters), skip the driving
-                    if( distSafestFromRobotPoseM < 2.0) {
+                    if( distSafestFromRoboctPoseM < 2.0) {
 
-                        cerr<<" the robot too cloose to safest point, skip .. distnace :"<<distSafestFromRobotPoseM<<endl;
+                        cerr<<" the robot too cloose to safest point, skip .. distnace :"<<distSafestFromRoboctPoseM<<endl;
                         explore_state_ = NAV_TO_NEXT_FRONTIER;
                         break;
                     }
