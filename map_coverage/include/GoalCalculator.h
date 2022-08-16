@@ -478,10 +478,10 @@ public:
 
             f.distFromPosition =   distanceCalculate(f.center, robotPix);
 
+            float areaInPix = cv::contourArea(contours[i]);
+            float contAreaM =  (1.0 / mapResolution) * ( areaInPix);    
 
-            float contAreaM =  (1.0 / mapResolution) * (cv::contourArea(f.contour) );    
-
-            cerr<<" the frontier area in M "<<contAreaM<<endl;
+            cerr<<" the frontier area in M "<<contAreaM<<" areaInPix "<<areaInPix<<endl;
             currentEdgesFrontiers.push_back(f);
 
             totalFreePoints += f.contour.size();

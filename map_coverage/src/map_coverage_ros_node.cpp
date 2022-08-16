@@ -1200,7 +1200,6 @@ public:
                 continue;
             }  
 
-            publishWaypointsWithStatus();
           
 
             switch (coverage_state_)
@@ -1262,11 +1261,14 @@ public:
                         
                         publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
 
+                        publishWaypointsWithStatus();
 
                         // the waypoint is checked
                         if( path_poses_with_status_.status_[i] == true ){
                             continue;
                         }
+
+
                         
 
                         bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], true);
