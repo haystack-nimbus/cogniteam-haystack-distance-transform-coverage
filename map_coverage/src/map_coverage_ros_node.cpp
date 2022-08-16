@@ -411,110 +411,123 @@ public:
 
             costMapImg.setTo(255, costMapImg!= 0);
 
-            cv::Mat costMapImgOnFrameMap = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
-
-        
             string global_costmap_frame = msg->header.frame_id;
 
-            for (int j = 0; j < costMapImg.rows; j++)
-            {
-                for (int i = 0; i < costMapImg.cols; i++)
-                {
-
-                    int value = costMapImg.at<uchar>(j, i);
-                    if(value == 0){
-                        continue;
-                    }
-
-                    cv::Point2d pixOdom(i, j);
-                    geometry_msgs::Quaternion q;
-                    q.w = 1;
-                    geometry_msgs::PoseStamped poseOodm = convertPixToPose(pixOdom, q);
-
-                    cv::Point3d pTmp = cv::Point3d(poseOodm.pose.position.x, 
-                        poseOodm.pose.position.y, 0);
-
-                    auto poseInMapFrame = transformFrames(pTmp, globalFrame_, global_costmap_frame ,msg->header.stamp);
-
-                    float xPixMap = (poseInMapFrame.point.x - map_origin_position_x) / mapResolution_;
-                    float yPixMap = (poseInMapFrame.point.y - map_origin_position_y) / mapResolution_;
-
-                    cv::Point pMapImg = cv::Point(xPixMap, yPixMap);
-
-                    if( pMapImg.y > 0 && pMapImg.y < costMapImgOnFrameMap.rows &&
-                        
-                        pMapImg.x > 0 && pMapImg.x < costMapImgOnFrameMap.cols ){
-                        circle(costMapImgOnFrameMap, pMapImg,  1, Scalar(255), -1, 8, 0);
-
-
-                    }
-                    
-    
-                }
-            }
-
-            Mat dbg = costMapImgOnFrameMap.clone();
+            Mat dbg = costMapImg.clone();
             cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
-          
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
-                auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
+                // transform to odom frame (global costmap framme)
+                cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
+                    path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
 
-                cerr<<i<<" pixOnMap "<<pixOnMap<<endl;
 
-                if  ( costMapImgOnFrameMap.at<uchar>(pixOnMap.y , pixOnMap.x) == 255) {
+                auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
+
+                // convert odom pose to odom pix
+                float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
+                float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
+
+                cv::Point pOnImg = cv::Point(xPix, yPix);
+                
+                // get the cost value
+                int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
+
+                if( costVal == 255 ){
+                    
+                    cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
 
                     path_poses_with_status_.setStatByIndex(i, true);
 
-                    circle(dbg, pixOnMap,  2, Scalar(0, 255, 0), -1, 8, 0);
+                    circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
-                } else {
 
-                    circle(dbg, pixOnMap,  2, Scalar(0, 0, 255), -1, 8, 0);
+                } else if( costVal == 0 ){
+
+                    cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
+                    circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
+
+
                 }
-
-
             }
-            cerr<<"--------------------------------------- "<<endl;
 
             imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
             imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
 
+            // cv::Mat costMapImgOnFrameMap = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+
+        
+
+            // for (int j = 0; j < costMapImg.rows; j++)
+            // {
+            //     for (int i = 0; i < costMapImg.cols; i++)
+            //     {
+
+            //         int value = costMapImg.at<uchar>(j, i);
+            //         if(value == 0){
+            //             continue;
+            //         }
+
+            //         cv::Point2d pixOdom(i, j);
+            //         geometry_msgs::Quaternion q;
+            //         q.w = 1;
+            //         geometry_msgs::PoseStamped poseOodm = convertPixToPose(pixOdom, q);
+
+            //         cv::Point3d pTmp = cv::Point3d(poseOodm.pose.position.x, 
+            //             poseOodm.pose.position.y, 0);
+
+            //         auto poseInMapFrame = transformFrames(pTmp, globalFrame_, global_costmap_frame ,msg->header.stamp);
+
+            //         float xPixMap = (poseInMapFrame.point.x - map_origin_position_x) / mapResolution_;
+            //         float yPixMap = (poseInMapFrame.point.y - map_origin_position_y) / mapResolution_;
+
+            //         cv::Point pMapImg = cv::Point(xPixMap, yPixMap);
+
+            //         if( pMapImg.y > 0 && pMapImg.y < costMapImgOnFrameMap.rows &&
+                        
+            //             pMapImg.x > 0 && pMapImg.x < costMapImgOnFrameMap.cols ){
+            //             circle(costMapImgOnFrameMap, pMapImg,  1, Scalar(255), -1, 8, 0);
 
 
+            //         }
+                    
+    
+            //     }
+            // }
+
+            // Mat dbg = costMapImgOnFrameMap.clone();
+            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+
+          
             // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
-            //     // transform to odom frame (global costmap framme)
-            //     cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
-            //         path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
+            //     auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
 
+            //     cerr<<i<<" pixOnMap "<<pixOnMap<<endl;
 
-            //     auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
-
-                
-            //     float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
-            //     float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
-
-            //     cv::Point pOnImg = cv::Point(xPix, yPix);
-                
-            //     int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
-
-            //     if( costVal == 255 ){
-                    
-            //         cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+            //     if  ( costMapImgOnFrameMap.at<uchar>(pixOnMap.y , pixOnMap.x) == 255) {
 
             //         path_poses_with_status_.setStatByIndex(i, true);
 
-            //     } else if( costVal == 0 ){
+            //         circle(dbg, pixOnMap,  2, Scalar(0, 255, 0), -1, 8, 0);
 
-            //         cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+            //     } else {
 
-
+            //         circle(dbg, pixOnMap,  2, Scalar(0, 0, 255), -1, 8, 0);
             //     }
 
 
             // }
+            // cerr<<"--------------------------------------- "<<endl;
+
+            // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
+
+
+
+            
 
 
         }
