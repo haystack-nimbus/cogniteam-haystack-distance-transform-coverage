@@ -410,6 +410,8 @@ public:
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
             costMapImg.setTo(255, costMapImg!= 0);
+            dilate(costMapImg, costMapImg, Mat(), Point(-1, -1), 1, 1, 1);     
+
 
             string global_costmap_frame = msg->header.frame_id;
 
