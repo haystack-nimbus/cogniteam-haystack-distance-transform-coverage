@@ -323,7 +323,7 @@ public:
 
     float calcEdgesFrontiers(const Mat& map, 
         std::vector<Frontier>& currentEdgesFrontiers,
-        const cv::Point& robotPix) {
+        const cv::Point& robotPix, float mapResolution) {
 
         cv::Mat binarayImage = map.clone();
         binarayImage.setTo(255, map == 254); 
@@ -478,6 +478,10 @@ public:
 
             f.distFromPosition =   distanceCalculate(f.center, robotPix);
 
+
+            float contAreaM =  (1.0 / mapResolution) * (cv::contourArea(f.contour) );    
+
+            cerr<<" the frontier area in M "<<contAreaM<<endl;
             currentEdgesFrontiers.push_back(f);
 
             totalFreePoints += f.contour.size();

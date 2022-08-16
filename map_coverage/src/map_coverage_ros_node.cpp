@@ -402,7 +402,7 @@ public:
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
         cerr<<" inside globalCostMapCallback "<<endl;
-        
+
         cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
         memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
@@ -1022,6 +1022,8 @@ public:
     {
         string m = "";
 
+        vector<cv::Point2d> unreachedPointFromFronitiers;
+
         while (ros::ok())
         {
             ros::spinOnce();
@@ -1047,6 +1049,15 @@ public:
                 continue;
             }           
 
+            currentAlgoMap_ = getCurrentMap();
+
+            Mat explorationImgMap = currentAlgoMap_.clone();
+            // set the unreached goals on the exploration map
+            for(int i = 0; i < unreachedPointFromFronitiers.size(); i++ ){
+                
+                int radiusPix = (1.0 / mapResolution_) * (robot_radius_meters_ );    
+                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));            }
+
             switch (explore_state_){
 
                 case NAV_TO_SAFEST_GOAL:
@@ -1056,7 +1067,6 @@ public:
 
 
                     cerr<<" NAV_TO_SAFEST_GOAL "<<endl;
-                    currentAlgoMap_ = getCurrentMap();
                     globalStart_ = convertPoseToPix(robotPose_);
 
                     startingLocation_ = robotPose_;
@@ -1064,7 +1074,7 @@ public:
                     startingTime_ = getCurrentTime();
 
                     cv::Point safestGoal;
-                    if (!goalCalculator.findSafestLocation(currentAlgoMap_, globalStart_, safestGoal))
+                    if (!goalCalculator.findSafestLocation(explorationImgMap, globalStart_, safestGoal))
                     {
 
                         explore_state_ = ERROR_EXPLORE;
@@ -1072,6 +1082,18 @@ public:
                     }
 
                     safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
+
+                    float distSafestFromRobotPoseM = 
+                            (1.0 / mapResolution_) * (goalCalculator.distanceCalculate( safestGoal, globalStart_) );    
+
+
+                    // it the robot close to the safest (under 2 meters), skip the driving
+                    if( distSafestFromRobotPoseM < 2.0) {
+
+                        cerr<<" the robot too cloose to safest point, skip .. distnace :"<<distSafestFromRobotPoseM<<endl;
+                        explore_state_ = NAV_TO_NEXT_FRONTIER;
+                        break;
+                    }
 
                     cerr<<"exploration: safestGoal "<<safestGoal<<endl;
                     
@@ -1092,12 +1114,11 @@ public:
 
                     float mapScore = 0.0;
 
-                    currentAlgoMap_ = getCurrentMap();
                     auto robotPix = convertPoseToPix(robotPose_);
 
                     std::vector<Frontier> currentEdgesFrontiers;
-                    mapScore = goalCalculator.calcEdgesFrontiers(currentAlgoMap_,
-                                          currentEdgesFrontiers, robotPix);
+                    mapScore = goalCalculator.calcEdgesFrontiers(explorationImgMap,
+                                          currentEdgesFrontiers, robotPix, mapResolution_);
 
                     cerr<<"map exploration score: "<<mapScore<<endl;
                     
@@ -1117,6 +1138,11 @@ public:
                     publishEdgesFrontiers(currentEdgesFrontiers);
 
                     bool result = sendGoal(nextFrontierGoal);
+
+                    if( !result) {
+
+                        unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
+                    }
 
 
 
@@ -1149,7 +1175,10 @@ public:
     }
 
     void coverage()
-    {
+    {   
+
+        int countNumberOfTriesFinsihGoal = 0;
+        
         while (ros::ok())
         {
             ros::spinOnce();
@@ -1261,7 +1290,14 @@ public:
                 }
                 case BACK_TO_STARTING_LOCATION:
                 {   
-                    cerr<<" BACK_TO_STARTING_LOCATION "<<endl;   
+                    cerr<<" BACK_TO_STARTING_LOCATION "<<endl; 
+
+                    if( countNumberOfTriesFinsihGoal > 3) {
+
+                        coverage_state_ = COVERAGE_DONE;  
+
+                        break; 
+                    }  
             
                     cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
                     cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
@@ -1282,7 +1318,10 @@ public:
                     {
                         cerr <<" Failed to reach BACK_TO_STARTING_LOCATION, try again" << endl;
 
-                        coverage_state_ = BACK_TO_STARTING_LOCATION;  
+                        coverage_state_ = BACK_TO_STARTING_LOCATION; 
+                        
+                        countNumberOfTriesFinsihGoal++;
+
 
                         break;
                     }
