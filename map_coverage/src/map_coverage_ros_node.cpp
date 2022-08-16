@@ -432,7 +432,7 @@ public:
                 cv::Point pOnImg = cv::Point(xPix, yPix);
                 
                 // get the cost value
-                int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
+                int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
 
                 if( costVal == 255 ){
                     
@@ -456,77 +456,7 @@ public:
             imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
             imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
 
-            // cv::Mat costMapImgOnFrameMap = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
-
-        
-
-            // for (int j = 0; j < costMapImg.rows; j++)
-            // {
-            //     for (int i = 0; i < costMapImg.cols; i++)
-            //     {
-
-            //         int value = costMapImg.at<uchar>(j, i);
-            //         if(value == 0){
-            //             continue;
-            //         }
-
-            //         cv::Point2d pixOdom(i, j);
-            //         geometry_msgs::Quaternion q;
-            //         q.w = 1;
-            //         geometry_msgs::PoseStamped poseOodm = convertPixToPose(pixOdom, q);
-
-            //         cv::Point3d pTmp = cv::Point3d(poseOodm.pose.position.x, 
-            //             poseOodm.pose.position.y, 0);
-
-            //         auto poseInMapFrame = transformFrames(pTmp, globalFrame_, global_costmap_frame ,msg->header.stamp);
-
-            //         float xPixMap = (poseInMapFrame.point.x - map_origin_position_x) / mapResolution_;
-            //         float yPixMap = (poseInMapFrame.point.y - map_origin_position_y) / mapResolution_;
-
-            //         cv::Point pMapImg = cv::Point(xPixMap, yPixMap);
-
-            //         if( pMapImg.y > 0 && pMapImg.y < costMapImgOnFrameMap.rows &&
-                        
-            //             pMapImg.x > 0 && pMapImg.x < costMapImgOnFrameMap.cols ){
-            //             circle(costMapImgOnFrameMap, pMapImg,  1, Scalar(255), -1, 8, 0);
-
-
-            //         }
-                    
-    
-            //     }
-            // }
-
-            // Mat dbg = costMapImgOnFrameMap.clone();
-            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
-
           
-            // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
-
-            //     auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
-
-            //     cerr<<i<<" pixOnMap "<<pixOnMap<<endl;
-
-            //     if  ( costMapImgOnFrameMap.at<uchar>(pixOnMap.y , pixOnMap.x) == 255) {
-
-            //         path_poses_with_status_.setStatByIndex(i, true);
-
-            //         circle(dbg, pixOnMap,  2, Scalar(0, 255, 0), -1, 8, 0);
-
-            //     } else {
-
-            //         circle(dbg, pixOnMap,  2, Scalar(0, 0, 255), -1, 8, 0);
-            //     }
-
-
-            // }
-            // cerr<<"--------------------------------------- "<<endl;
-
-            // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
-            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
-
-
-
             
 
 
@@ -1172,8 +1102,8 @@ public:
 
                     safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
 
-                    float distSafestFromRobotPoseM = 
-                            (1.0 / mapResolution_) * (goalCalculator.distanceCalculate( safestGoal, globalStart_) );    
+                    float distSafestFromRoboctPoseM = 
+                            (mapResolution_) * (goalCalculator.distanceCalculate( safestGoal, globalStart_) );    
 
                     cerr<<" distSafestFromRobotPoseM "<<distSafestFromRobotPoseM<<endl;
                     // it the robot close to the safest (under 2 meters), skip the driving
