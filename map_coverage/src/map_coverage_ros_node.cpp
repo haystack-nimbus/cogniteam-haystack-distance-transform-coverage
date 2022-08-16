@@ -455,8 +455,8 @@ public:
                 }
             }
 
-            imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
-            imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
+            // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);
 
           
             
@@ -660,15 +660,17 @@ public:
                 m.color.a = 1.0;
 
                 //checked
+
                 if( path_poses_with_status_.status_[i]){
 
                     m.color.r = 0;
-                    m.color.g = 1.0;
+                    m.color.g = 0.0;
                     m.color.b = 0.0;
+                    
                 } else {
 
-                    m.color.r = 1.0;
-                    m.color.g = 0.0;
+                    m.color.r = 0.0;
+                    m.color.g = 1.0;
                     m.color.b = 0.0;
                 }
                
