@@ -400,10 +400,10 @@ public:
 
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
+        cerr<<"11111111111111111111111111 inside globalCostMapCallback "<<endl;
 
         if( init_ ){
 
-            cerr<<"11111111111111111111111111 inside globalCostMapCallback "<<endl;
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
