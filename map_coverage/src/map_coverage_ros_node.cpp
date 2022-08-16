@@ -1725,7 +1725,7 @@ private:
     float robotHeightM_ = 0.53;
     double robot_radius_meters_ = 0.3;
 
-    double radius_for_cleaning_route_goals_ = 0.3;
+    double radius_for_cleaning_route_goals_ = 0.2;
 
     double wanted_coverage_score_ = 0.95;
 
