@@ -268,8 +268,6 @@ public:
         disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
         disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
 
-        nav_msgs::Path robotHistoryPathMsg_;
-        robotHistoryPathMsg_.header.frame_id = globalFrame_;
        
 
     }
@@ -300,6 +298,8 @@ public:
     void publishRobotHistoryPath() {
 
         robotHistoryPathMsg_.header.stamp = ros::Time::now();
+        robotHistoryPathMsg_.header.frame_id = globalFrame_;
+
         robot_history_path_pub_.publish(robotHistoryPathMsg_);
     }
 
