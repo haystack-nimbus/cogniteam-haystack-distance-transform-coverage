@@ -1090,7 +1090,7 @@ public:
                     float distSafestFromRobotPoseM = 
                             (1.0 / mapResolution_) * (goalCalculator.distanceCalculate( safestGoal, globalStart_) );    
 
-
+                    cerr<<" distSafestFromRobotPoseM "<<distSafestFromRobotPoseM<<endl;
                     // it the robot close to the safest (under 2 meters), skip the driving
                     if( distSafestFromRobotPoseM < 2.0) {
 
@@ -1255,6 +1255,9 @@ public:
                     cerr << " num of coverage waypoints " << path_poses_with_status_.coveragePathPoses_.size() << endl;
                     for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
                     {   
+
+                        ros::spinOnce();
+
 
                         percentCoverage_ = ( float(i) / float(path_poses_with_status_.coveragePathPoses_.size()))  * 100.0;
                         node_.setParam("/coverage/percentage", percentCoverage_);    
@@ -1432,6 +1435,8 @@ public:
         auto start = ros::WallTime::now();
         bool result = true;
         while(ros::ok()) {
+
+            ros::spinOnce();
 
             if( exit_){
 
