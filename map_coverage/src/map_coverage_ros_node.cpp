@@ -403,8 +403,6 @@ public:
 
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
-        cerr<<"11111111111111111111111111 inside globalCostMapCallback "<<endl;
-
         if( init_ ) {
 
 
@@ -412,41 +410,96 @@ public:
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
             costMapImg.setTo(255, costMapImg!= 0);
+
+            cv::Mat costMapImgOnFrameMap = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+
         
             string global_costmap_frame = msg->header.frame_id;
 
+            for (int j = 0; j < costMapImg.rows; j++)
+            {
+                for (int i = 0; i < costMapImg.cols; i++)
+                {
+
+                    int value = costMapImg.at<uchar>(j, i);
+                    if(value == 0){
+                        continue;
+                    }
+
+                    cv::Point2d pixOdom(i, j);
+                    geometry_msgs::Quaternion q;
+                    q.w = 1;
+                    geometry_msgs::PoseStamped poseOodm = convertPixToPose(pixOdom, q);
+
+                    cv::Point3d pTmp = cv::Point3d(poseOodm.pose.position.x, 
+                        poseOodm.pose.position.y, 0);
+
+                    auto poseInMapFrame = transformFrames(pTmp, globalFrame_, global_costmap_frame ,msg->header.stamp);
+
+                    float xPixMap = (poseInMapFrame.point.x - map_origin_position_x) / mapResolution_;
+                    float yPixMap = (poseInMapFrame.point.y - map_origin_position_y) / mapResolution_;
+
+                    cv::Point pMapImg = cv::Point(xPixMap, yPixMap);
+
+                    if( pMapImg.y > 0 && pMapImg.y < costMapImgOnFrameMap.rows &&
+                        
+                        pMapImg.x > 0 && pMapImg.x < costMapImgOnFrameMap.cols ){
+                            costMapImgOnFrameMap.at<uchar>(pMapImg.y , pMapImg.x) = 255;
+
+                    }
+                    
+    
+                }
+            }
+
+            imwrite("costMaponMap.png", costMapImgOnFrameMap);
+
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
-                // transform to odom frame (global costmap framme)
-                cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
-                    path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
+                auto pixOnMap =  convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]);
 
-
-                auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
-
-                
-                float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
-                float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
-
-                cv::Point pOnImg = cv::Point(xPix, yPix);
-                
-                int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
-
-                if( costVal == 255 ){
-                    
-                    cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+                if  ( costMapImgOnFrameMap.at<uchar>(pixOnMap.y , pixOnMap.x) == 255) {
 
                     path_poses_with_status_.setStatByIndex(i, true);
-
-                } else if( costVal == 0 ){
-
-                    cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
-
 
                 }
 
 
             }
+
+
+            // for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
+
+            //     // transform to odom frame (global costmap framme)
+            //     cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
+            //         path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 0);
+
+
+            //     auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
+
+                
+            //     float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
+            //     float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
+
+            //     cv::Point pOnImg = cv::Point(xPix, yPix);
+                
+            //     int costVal = costMapImg.at<uchar>(cv::Point(pOnImg.y, pOnImg.x));
+
+            //     if( costVal == 255 ){
+                    
+            //         cerr<<"yes  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
+            //         path_poses_with_status_.setStatByIndex(i, true);
+
+            //     } else if( costVal == 0 ){
+
+            //         cerr<<"no  costVal "<<costVal<<" pOnImg "<<pOnImg<<endl;
+
+
+            //     }
+
+
+            // }
 
 
         }
