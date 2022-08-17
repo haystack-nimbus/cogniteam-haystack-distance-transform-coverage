@@ -107,7 +107,6 @@ public:
             }
         }
 
-        cerr<<" currentPosition "<<currentPosition<<" goal "<<goal<<endl;
         return true;
        
           
@@ -467,6 +466,12 @@ public:
 
             f.center.x = 0;
             f.center.y = 0;
+
+            int numOfPointInCont = contours[i].size();
+
+            if( numOfPointInCont < 10 ) {
+                continue;
+            }
             for(int k = 0; k < contours[i].size(); k++ ){
 
                 f.center.x += contours[i][k].x;
@@ -499,7 +504,6 @@ public:
             return   -1;
         }
 
-        cerr<<" numOfBlockedPoints "<<numOfBlockedPoints<<" totalFreePoints "<<totalFreePoints<<endl;  
         float score =  numOfBlockedPoints / float(numOfBlockedPoints + totalFreePoints);
 
         if( score > 1.0){
