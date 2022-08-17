@@ -1811,7 +1811,7 @@ int main(int argc, char **argv)
 //     DistanceTransformGoalCalculator distanceTransformGoalCalculator;
 
 //     float mapResolution_ = 0.05;
-//     float distBetweenGoalsM_ = 0.5;
+//     float distBetweenGoalsM_ = 0.3;
 
 //     float robotWidthM = 0.53;
 //     float robotHeightM = 0.53;
@@ -1829,10 +1829,13 @@ int main(int argc, char **argv)
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
 //     float robot_radius_meters_ = 0.3;
 
-//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/data/1/map.pgm",0);
+//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/map.pgm",0);
+
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
-  
+    
+//     imwrite("/home/yakir/distance_transform_coverage_ws/dbg.pgm", currentAlgoMap_);
+
    
 //     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
@@ -1861,7 +1864,7 @@ int main(int argc, char **argv)
         
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(380, 207);
+//         cv::Point2d currentPosition(491, 372);
 //         //cv::Point2d currentPosition(468, 279);
 
 //         cv::Point2d goal = currentPosition;

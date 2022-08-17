@@ -194,35 +194,35 @@ public:
 
         } else {
 
-
             break;
-            // string pString = getPointString(currentP);
-            // if (son_father_.find(pString) == son_father_.end())
-            // {
-            //     cerr << "reached to start again " << endl;
-            //     break;
-            // }
-            // cv::Point father = son_father_.at(pString);
 
-            // // cerr<<"go to father "<<father<<endl;
-            // NeighborCell = father;
-            // currentP = father;
+            string pString = getPointString(currentP);
+            if (son_father_.find(pString) == son_father_.end())
+            {
+                cerr << "reached to start again " << endl;
+                break;
+            }
+            cv::Point father = son_father_.at(pString);
 
-            // if (debug_)
-            // {
-            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
-            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[1] = 255;
-            //     grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[2] = 0;
+            // cerr<<"go to father "<<father<<endl;
+            NeighborCell = father;
+            currentP = father;
 
-            //     circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(0, 100, 255), -1, 8, 0);
-            // }
-            // if (debug_)
-            // {
-            //     imshow("grayScaleImg", grayScaleImg);
-            //     waitKey(0);
-            // }
+            if (debug_)
+            {
+                grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
+                grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[1] = 255;
+                grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[2] = 0;
 
-            // continue;
+                circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(0, 100, 255), -1, 8, 0);
+            }
+            if (debug_)
+            {
+                imshow("grayScaleImg", grayScaleImg);
+                waitKey(0);
+            }
+
+            continue;
         }
 
        
@@ -394,23 +394,23 @@ private:
       validCells[direction] = true;
 
       // if the robot can rotate
-      if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
+      // if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
         
-        cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
-            robotWidthPix_, robotHeightPix_);
-        for( int x = r.x; x < r.x + r.width; x++){
-            for( int y = r.y; y < r.y + r.height; y++){
+      //   cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
+      //       robotWidthPix_, robotHeightPix_);
+      //   for( int x = r.x; x < r.x + r.width; x++){
+      //       for( int y = r.y; y < r.y + r.height; y++){
                 
-                cv::Point2d pInBox(x, y);
-                if (distanceTransform.at<int>(pInBox.y, pInBox.x) == LARGE_NUM)
-                {
-                    validCells[direction] = false;
-                    break;
-                }
-            }
+      //           cv::Point2d pInBox(x, y);
+      //           if (distanceTransform.at<int>(pInBox.y, pInBox.x) == LARGE_NUM)
+      //           {
+      //               validCells[direction] = false;
+      //               break;
+      //           }
+      //       }
 
-        }      
-      }  
+      //   }      
+      // }  
       
 
       // if its blocked
