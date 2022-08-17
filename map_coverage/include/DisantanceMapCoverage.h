@@ -135,7 +135,6 @@ public:
 
       float totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
 
-      cerr << "seenButNotVisited_ size " << seenButNotVisited_.size() << endl;
 
       if (totalCoverSoFar > wanted_coverage_score)
       {
@@ -145,13 +144,11 @@ public:
       // if not found
       if (!foundN)
       { 
-        cerr<<" not foundN "<<endl;
         
         path.push_back(currentP);
 
         if( seenButNotVisited_.count(getPointString(currentP))){
 
-           cerr<<" erase 1 "<<endl;
 
             seenButNotVisited_.erase(getPointString(currentP));
         }
@@ -162,7 +159,6 @@ public:
         if( seenButNotVisited_.size() > 0) {
             
 
-            cerr<<" 11111111111111111111111 "<<endl;
             float minDist = 99999;
 
             cv::Point closestPoint;
@@ -188,7 +184,6 @@ public:
 
             currentP = closestPoint;
 
-            cerr<<" the p will be "<<currentP<<endl;
             continue;
 
 
@@ -229,7 +224,6 @@ public:
       }
       
 
-      cerr<<" foundN "<<endl;
       if (debug_)
       {
         grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[0] = 255;
@@ -263,7 +257,6 @@ public:
 
         if( seenButNotVisited_.find(getPointString(currentP)) != seenButNotVisited_.end()){
 
-            cerr<<" erase 3 "<<endl; 
             seenButNotVisited_.erase(getPointString(currentP));
         }
 
@@ -296,7 +289,6 @@ public:
         if( seenButNotVisited_.count(getPointString(currentP))){
 
             
-            cerr<<" erase 2 "<<endl;
             seenButNotVisited_.erase(getPointString(currentP));
         }
 

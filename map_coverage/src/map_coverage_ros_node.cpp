@@ -201,7 +201,7 @@ public:
         // rosparam
         ros::NodeHandle nodePrivate("~");
         nodePrivate.param("distance_between_goals_m", distBetweenGoalsM_, 0.5);
-        nodePrivate.param("robot_raduis", robot_radius_meters_, 0.3);
+        nodePrivate.param("robot_raduis", robot_radius_meters_, 0.2);
         nodePrivate.param("wanted_coverage_score", wanted_coverage_score_, 0.95);
         nodePrivate.param("duration_wait_for_move_base_response", duration_wait_for_move_base_response_, 15.0);
         nodePrivate.param<string>("coverage_image_path", coverage_img_path_, string(""));  
@@ -1279,7 +1279,8 @@ public:
                     // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
                     // calc the path-coverage of the current blob
-
+                    
+                    cerr<<" cccccccccccccccccc currentPosition for patthern "<<currentPosition<<endl;
                     path_ =
                         disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
                                                             goal, distanceTransformImg, getDistanceBetweenGoalsPix(), 
@@ -1751,7 +1752,7 @@ private:
 
     float robotWidthM_ = 0.53;
     float robotHeightM_ = 0.53;
-    double robot_radius_meters_ = 0.3;
+    double robot_radius_meters_ = 0.2;
 
     double radius_for_cleaning_route_goals_ = 0.2;
 
@@ -1810,6 +1811,8 @@ int main(int argc, char **argv)
 
 //     DistanceTransformGoalCalculator distanceTransformGoalCalculator;
 
+//     cerr<<"2222222222222222222222222222222222 " <<endl;
+
 //     float mapResolution_ = 0.05;
 //     float distBetweenGoalsM_ = 0.3;
 
@@ -1827,15 +1830,15 @@ int main(int argc, char **argv)
 
     
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
-//     float robot_radius_meters_ = 0.3;
+//     float robot_radius_meters_ = 0.2;
 
-//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/map.pgm",0);
+//     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/bugs/1/map.pgm",0);
 
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
     
-//     imwrite("/home/yakir/distance_transform_coverage_ws/dbg.pgm", currentAlgoMap_);
-
+//     cerr<<"111111111111111111111111111111111111 " <<endl;
+    
    
 //     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
@@ -1864,7 +1867,7 @@ int main(int argc, char **argv)
         
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(491, 372);
+//         cv::Point2d currentPosition(400, 401);
 //         //cv::Point2d currentPosition(468, 279);
 
 //         cv::Point2d goal = currentPosition;
