@@ -428,8 +428,6 @@ public:
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
             costMapImg.setTo(255, costMapImg!= 0);
-            dilate(costMapImg, costMapImg, Mat(), Point(-1, -1), 1, 1, 1);     
-
 
             string global_costmap_frame = msg->header.frame_id;
 
@@ -1324,7 +1322,7 @@ public:
                         if (true) {
 
                             float angleRobot2Goal = 
-                                atan2 (robotPose_.pose.position.y - path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 
+                                -1.0 * atan2 (robotPose_.pose.position.y - path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 
                                     robotPose_.pose.position.x - path_poses_with_status_.coveragePathPoses_[i].pose.position.x);
                            
                             path_poses_with_status_.coveragePathPoses_[i].pose.orientation = 
