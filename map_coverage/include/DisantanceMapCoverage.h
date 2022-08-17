@@ -37,11 +37,11 @@ public:
   
   void setRobotWidthPix(float robotWidthPix){
 
-    robotWidthPix_ = robotWidthPix * 1.5;
+    robotWidthPix_ = robotWidthPix + 0.3 ;
   }
   void setRobotHeightPix(float robotHeightPix){
 
-    robotHeightPix_ = robotHeightPix * 1.5;
+    robotHeightPix_ = robotHeightPix + 0.3 ;
   }
     
   double getWantedCoverArea(const cv::Mat& imgMap, const cv::Point& start, double dist_between_points)
@@ -392,24 +392,24 @@ private:
     {
       validCells[direction] = true;
 
-      // if the robot can rotate
-      // if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
+      if the robot can rotate
+      if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
         
-      //   cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
-      //       robotWidthPix_, robotHeightPix_);
-      //   for( int x = r.x; x < r.x + r.width; x++){
-      //       for( int y = r.y; y < r.y + r.height; y++){
+        cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
+            robotWidthPix_, robotHeightPix_);
+        for( int x = r.x; x < r.x + r.width; x++){
+            for( int y = r.y; y < r.y + r.height; y++){
                 
-      //           cv::Point2d pInBox(x, y);
-      //           if (distanceTransform.at<int>(pInBox.y, pInBox.x) == LARGE_NUM)
-      //           {
-      //               validCells[direction] = false;
-      //               break;
-      //           }
-      //       }
+                cv::Point2d pInBox(x, y);
+                if (distanceTransform.at<int>(pInBox.y, pInBox.x) == LARGE_NUM)
+                {
+                    validCells[direction] = false;
+                    break;
+                }
+            }
 
-      //   }      
-      // }  
+        }      
+      }  
       
 
       // if its blocked
