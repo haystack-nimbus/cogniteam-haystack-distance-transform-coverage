@@ -1446,7 +1446,7 @@ public:
                          cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                              path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
            
-           if ( distRobotFromGoal < 0.2) {
+           if ( distRobotFromGoal < mapResolution_) {
               
                 path_poses_with_status_.setStatByIndex(i, true);
            }
