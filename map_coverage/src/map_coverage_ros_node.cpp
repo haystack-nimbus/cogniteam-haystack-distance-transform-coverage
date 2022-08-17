@@ -1308,7 +1308,6 @@ public:
                         
                         publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
 
-                        publishWaypointsWithStatus();
 
                         publishRobotHistoryPath();
 
@@ -1520,6 +1519,9 @@ public:
             removeGoalsByRobotRout();
 
             publishRobotHistoryPath();
+
+            publishWaypointsWithStatus();
+
 
             if( exit_){
 
