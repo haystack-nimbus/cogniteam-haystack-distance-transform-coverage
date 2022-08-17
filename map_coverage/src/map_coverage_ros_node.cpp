@@ -807,7 +807,9 @@ public:
                 posesPath.push_back(pose);
             }
             else
-            {
+            {                  
+
+                
                 if(  reducing_goals_) {
 
                     if (angle != prevAngle)
@@ -1292,7 +1294,8 @@ public:
                     path_poses_with_status_.initStatusList();
 
                     // exectute currnet navigation the blob-coverage
-                    cerr << " num of coverage waypoints " << path_poses_with_status_.coveragePathPoses_.size() << endl;
+                    cerr <<"cccccccccccc num of coverage waypoints " << 
+                        path_poses_with_status_.coveragePathPoses_.size() <<" path_ size is "<<path_.size()<<endl;
                     
                     for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
                     {   
@@ -1821,11 +1824,14 @@ int main(int argc, char **argv)
 //     float robotWidthPix = (1.0 / mapResolution_) * robotWidthM;
 //     float robotHeightPix = (1.0 / mapResolution_) * robotHeightM;
 
-//     DisantanceMapCoverage disantanceMapCoverage(true);
+//     DisantanceMapCoverage disantanceMapCoverage(false);
 //     GoalCalculator goalCalculator;
 
 //     disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
 //     disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
+
+//     cv::Point2d currentPosition(398,384);
+
 
 
     
@@ -1839,6 +1845,9 @@ int main(int argc, char **argv)
     
 //     cerr<<"111111111111111111111111111111111111 " <<endl;
     
+//     // circle(currentAlgoMap_, currentPosition, 2, Scalar(150), -1, 8, 0);
+//     // imwrite("/home/yakir/distance_transform_coverage_ws/bugs/1/dbg.png", currentAlgoMap_);
+//     // return 0;
    
 //     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
@@ -1867,8 +1876,6 @@ int main(int argc, char **argv)
         
 //         cv::Mat distanceTransformImg;
 
-//         cv::Point2d currentPosition(400, 401);
-//         //cv::Point2d currentPosition(468, 279);
 
 //         cv::Point2d goal = currentPosition;
 //         // // calc the distance-transform-img from current goal
@@ -1908,7 +1915,7 @@ int main(int argc, char **argv)
 //         circle(dbg, currentPosition, 2, Scalar(0,0,255), -1, 8, 0);  
 
 //         // imwrite("/home/yakir/distance_transform_coverage_ws/dbg.png", dbg);
-//         imshow("dbg",dbg);
+//         imshow("dbg2",dbg);
 //         // imshow("distanceTransformImg", grayDistImg);
 //         waitKey(0);
 //     }

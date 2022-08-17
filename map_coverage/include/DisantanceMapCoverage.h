@@ -117,6 +117,7 @@ public:
 
     cv::Point currentP(start.x, start.y);
 
+    float totalCoverSoFar = 0.0;
     do
     {
       if (path.size() > 0 && debug_)
@@ -125,21 +126,23 @@ public:
       }
 
 
-      if (debug_)
+      if (debug_){
         circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(255, 0, 255), -1, 8, 0);
+
+      }
 
       // try no find valid neighbor with largest distance
       cv::Point NeighborCell;
       bool foundN = findNeighborCell(distanceTransformImg, visitedCells, currentP, NeighborCell, grayScaleImg,
                                      dist_between_points);
 
-      float totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
+      totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
 
 
-      if (totalCoverSoFar > wanted_coverage_score)
-      {
-        break;
-      }
+      // if (totalCoverSoFar > wanted_coverage_score)
+      // {
+      //   break;
+      // }
 
       // if not found
       if (!foundN)
@@ -307,18 +310,22 @@ public:
 
     } while (true);
 
+    if (debug_){
 
-    // for(int i = 0; i < path.size() - 1; i++ ){
+      for(int i = 0; i < path.size() - 1; i++ ){
 
-    //     cv::line(dbg, path[i],  path[i + 1], Scalar(255, 255, 0), 2);
+        cv::line(dbg, path[i],  path[i + 1], Scalar(255, 255, 0), 2);
 
-    //     imshow("dbg",dbg);
-    //     waitKey(0);
+        imshow("inner_dbg",dbg);
+        waitKey(0);
 
 
-    // }
+      } 
 
- 
+    }
+    
+
+    cerr<<" totalCoverSoFar "<<totalCoverSoFar<<endl;
     return path;
   }
 
@@ -426,7 +433,7 @@ private:
         visitedCellsNe[direction] = false;
       }
 
-      if (validCells[direction] && debug_)
+      if (validCells[direction] )
       {
         if (visitedCellsNe[direction])
         {
