@@ -2,7 +2,7 @@
 
     <arg name="distance_between_goals_m" default="0.5" />  
     <arg name="robot_raduis" default="0.2" />  
-    <arg name="coverage_image_path" default="/home/haystack/haystack_disinfect_report/images/" /> 
+    <arg name="coverage_image_path" default="/haystack_disinfect_report/images/" /> 
     <arg name="wanted_coverage_score" default="0.90" />     
 
     <arg name="duration_wait_for_move_base_response" default="15.0" />  
