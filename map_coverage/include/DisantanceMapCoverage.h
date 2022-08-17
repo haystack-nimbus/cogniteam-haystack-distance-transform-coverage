@@ -37,11 +37,11 @@ public:
   
   void setRobotWidthPix(float robotWidthPix){
 
-    robotWidthPix_ = robotWidthPix + 0.3 ;
+    robotWidthPix_ =  0.3 ;
   }
   void setRobotHeightPix(float robotHeightPix){
 
-    robotHeightPix_ = robotHeightPix + 0.3 ;
+    robotHeightPix_ =  0.3 ;
   }
     
   double getWantedCoverArea(const cv::Mat& imgMap, const cv::Point& start, double dist_between_points)
@@ -392,7 +392,6 @@ private:
     {
       validCells[direction] = true;
 
-      if the robot can rotate
       if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
         
         cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
