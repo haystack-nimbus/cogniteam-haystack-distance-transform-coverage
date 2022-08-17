@@ -1314,6 +1314,19 @@ public:
                         if( path_poses_with_status_.status_[i] == true ){
                             continue;
                         }
+
+                        // set the orientation of the goal dynamically
+                        
+                        if (true) {
+
+                            float angleRobot2Goal = 
+                                atan2 (robotPose_.pose.position.y - path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 
+                                    robotPose_.pose.position.x - path_poses_with_status_.coveragePathPoses_[i].pose.position.x);
+                           
+                            path_poses_with_status_.coveragePathPoses_[i].pose.orientation = 
+                                tf::createQuaternionMsgFromYaw(angleRobot2Goal);
+
+                        }
                         
 
                         bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], true);
@@ -1429,7 +1442,7 @@ public:
                          cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                              path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
            
-           if ( distRobotFromGoal < radius_for_cleaning_route_goals_) {
+           if ( distRobotFromGoal < 0.2) {
               
                 path_poses_with_status_.setStatByIndex(i, true);
            }
@@ -1585,16 +1598,29 @@ public:
 
         if( !imgSaved_ && mapping_map_.data){
 
-            Mat coverageImg = mapping_map_.clone();
-            cvtColor(coverageImg, coverageImg, COLOR_GRAY2BGR);
+            Mat patternImg = mapping_map_.clone();
+            Mat robotTreaceImg = mapping_map_.clone();
 
-            // draw the path  
+            cvtColor(patternImg, patternImg, COLOR_GRAY2BGR);
+            cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
 
+
+            // draw the pattern
             for( int i = 0; i < path_.size(); i++){
 
                 if( i > 0 ){
-                    cv::line(coverageImg, path_[i], path_[i - 1], Scalar(34, 139, 139), 2);
+                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), 2);
                 }             
+            }
+
+            // draw the robot trace
+            for( int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++){
+
+
+                cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
+                cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
+
+                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), 2);      
             }
 
 
@@ -1617,7 +1643,9 @@ public:
 
             cerr<<"full_img_name: "<<full_img_name<<endl;
 
-            cv::imwrite(full_img_name, coverageImg);
+            cv::imwrite(full_img_name, robotTreaceImg);
+            cv::imwrite(coverage_img_path_+"patthern.png", patternImg);
+
 
             imgSaved_ = true;
         }
