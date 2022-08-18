@@ -35,14 +35,11 @@ public:
   {
   }
   
-  void setRobotWidthPix(float robotWidthPix){
+  void setRectFreeSapceDim(float robotWidthPix, float robotHeightPix){
 
-    robotWidthPix_ =  0.3 ;
+    radiusFreeSpace_ =  robotWidthPix / 2.0 ;
   }
-  void setRobotHeightPix(float robotHeightPix){
-
-    robotHeightPix_ =  0.3 ;
-  }
+ 
     
   double getWantedCoverArea(const cv::Mat& imgMap, const cv::Point& start, double dist_between_points)
   {
@@ -91,8 +88,7 @@ public:
   }
 
   vector<cv::Point> getCoveragePath(const cv::Mat& imgMap, const cv::Point& start, const cv::Point& goal,
-                                    cv::Mat& distanceTransformImg, double dist_between_points,
-                                    float wanted_coverage_score)
+                                    cv::Mat& distanceTransformImg, double dist_between_points)
   {
     
     cv::Mat visitedCells(distanceTransformImg.rows, distanceTransformImg.cols, CV_8UC1, cv::Scalar(NOT_VISITED));
@@ -127,7 +123,7 @@ public:
 
 
       if (debug_){
-        circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(255, 0, 255), -1, 8, 0);
+        circle(grayScaleImg, currentP, radiusFreeSpace_ , Scalar(255, 0, 255), -1, 8, 0);
 
       }
 
@@ -139,10 +135,6 @@ public:
       totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
 
 
-      // if (totalCoverSoFar > wanted_coverage_score)
-      // {
-      //   break;
-      // }
 
       // if not found
       if (!foundN)
@@ -212,7 +204,7 @@ public:
                 grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[1] = 255;
                 grayScaleImg.at<cv::Vec3b>(NeighborCell.y, NeighborCell.x)[2] = 0;
 
-                circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3 , Scalar(0, 100, 255), -1, 8, 0);
+                circle(grayScaleImg, currentP, radiusFreeSpace_, Scalar(0, 100, 255), -1, 8, 0);
             }
             if (debug_)
             {
@@ -250,12 +242,7 @@ public:
         }
 
 
-       //////////////////////////////////////////
-        // cv::Rect r(currentP.x - (robotWidthPix_ / 2), currentP.y - (robotHeightPix_ / 2), 
-        //     robotWidthPix_, robotHeightPix_);
-        // cv::rectangle(grayScaleImg, r, Scalar(0, 0, 255), 0.5);
-        //////////////////////////////////////////
-
+     
         path.push_back(currentP);
 
         if( seenButNotVisited_.find(getPointString(currentP)) != seenButNotVisited_.end()){
@@ -281,12 +268,6 @@ public:
           grayScaleImg.at<cv::Vec3b>(currentP.y, currentP.x)[2] = 0;
         }
 
-        //////////////////////////////////////////
-        // cv::Rect r(currentP.x - (robotWidthPix_ / 2), currentP.y - (robotHeightPix_ / 2), 
-        //     robotWidthPix_, robotHeightPix_);
-        // cv::rectangle(grayScaleImg, r, Scalar(0, 0, 255), 0.5);
-        //////////////////////////////////////////
-
         path.push_back(currentP);
 
         if( seenButNotVisited_.count(getPointString(currentP))){
@@ -302,7 +283,7 @@ public:
 
       if (debug_)
       {
-        circle(grayScaleImg, currentP, robotWidthPix_ / 2 / 3, Scalar(255, 0, 0), -1, 8, 0);
+        circle(grayScaleImg, currentP, radiusFreeSpace_ , Scalar(255, 0, 0), -1, 8, 0);
 
         imshow("grayScaleImg", grayScaleImg);
         waitKey(0);
@@ -392,10 +373,10 @@ private:
     {
       validCells[direction] = true;
 
-      if( robotWidthPix_ != 0.0 && robotHeightPix_ != 0.0){
+      if( radiusFreeSpace_ != 0.0 ){
         
-        cv::Rect r(neighboar.x - (robotWidthPix_ / 2 ), neighboar.y - (robotHeightPix_ / 2), 
-            robotWidthPix_, robotHeightPix_);
+        cv::Rect r(neighboar.x - (radiusFreeSpace_ ), neighboar.y - (radiusFreeSpace_), 
+            radiusFreeSpace_ * 2 , radiusFreeSpace_ * 2);
         for( int x = r.x; x < r.x + r.width; x++){
             for( int y = r.y; y < r.y + r.height; y++){
                 
@@ -551,9 +532,7 @@ private:
 private:
   bool debug_ = false;
 
-  float robotWidthPix_ = 0.0;
-
-  float robotHeightPix_ = 0.0;
+  float radiusFreeSpace_ = 0.0;
 
   std::map<string, cv::Point> seenButNotVisited_;
 

@@ -112,7 +112,6 @@ struct Path_with_Status
         for( int i = 0; i < status_.size(); i++){
 
             setStatByIndex(i, false);
-
         }
 
     }
@@ -146,12 +145,12 @@ string getCurrentTime(){
 }
 
 
-void addDilationForGlobalMap(Mat &imgMap, float robot_radius_meters_, float mapResolution)
+void addDilationForGlobalMap(Mat &imgMap, float walls_inflation_m, float mapResolution)
 {
 
     try
     {
-        int dilationPix = (1.0 / mapResolution) * (robot_radius_meters_ );        
+        int dilationPix = (1.0 / mapResolution) * (walls_inflation_m );        
 
         cv::Mat binary = imgMap.clone();
         binary.setTo(0, imgMap != 0);
@@ -201,8 +200,12 @@ public:
         // rosparam
         ros::NodeHandle nodePrivate("~");
         nodePrivate.param("distance_between_goals_m", distBetweenGoalsM_, 0.5);
-        nodePrivate.param("robot_raduis", robot_radius_meters_, 0.2);
-        nodePrivate.param("wanted_coverage_score", wanted_coverage_score_, 0.95);
+        nodePrivate.param("walls_inflation_m", walls_inflation_m_, 0.3);
+        nodePrivate.param("robot_w_m", robot_w_m_, 0.53);
+        nodePrivate.param("robot_h_m", robot_h_m_, 0.53);
+
+
+
         nodePrivate.param("duration_wait_for_move_base_response", duration_wait_for_move_base_response_, 15.0);
         nodePrivate.param<string>("coverage_image_path", coverage_img_path_, string(""));  
         nodePrivate.param<string>("base_frame", baseFrame_, string("base_link"));  
@@ -261,12 +264,11 @@ public:
 
 
      
-        float robotWidthPix = (1.0 / mapResolution_) * robotWidthM_;
-        float robotHeightPix = (1.0 / mapResolution_) * robotHeightM_;
+        float robotWidthPix = (1.0 / mapResolution_) * robot_w_m_;
+        float robotHeightPix = (1.0 / mapResolution_) * robot_h_m_;
 
         DisantanceMapCoverage disantanceMapCoverage(true);
-        disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
-        disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
+        disantanceMapCoverage.setRectFreeSapceDim(robotWidthPix, robotHeightPix);
 
        
 
@@ -421,13 +423,12 @@ public:
         auto endGoblalCostMap = high_resolution_clock::now();
         auto durationFromLastCalc = duration_cast<seconds>(endGoblalCostMap - startGoblalCostMap_).count();
 
-
-        if( init_ && durationFromLastCalc > 1.0) {
+        /// do this every 2 seconds
+        if( init_ && durationFromLastCalc > 2.0) {
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
 
-            costMapImg.setTo(255, costMapImg!= 0);
 
             string global_costmap_frame = msg->header.frame_id;
 
@@ -450,9 +451,9 @@ public:
                 cv::Point pOnImg = cv::Point(xPix, yPix);
                 
                 // get the cost value
-                int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
+                int costVal = costMapImg.at<int8_t>(pOnImg.y, pOnImg.x);
 
-                if( costVal == 255 ){
+                if( costVal != 0 ){
                     
 
                     path_poses_with_status_.setStatByIndex(i, true);
@@ -528,10 +529,7 @@ public:
 
         currentGlobalMap_ = occupancyGridMatToGrayScale(tmp.clone());
 
-        mapping_map_ = currentGlobalMap_.clone();
-
-
-        addDilationForGlobalMap(currentGlobalMap_, robot_radius_meters_, mapResolution_);
+        addDilationForGlobalMap(currentGlobalMap_, walls_inflation_m_, mapResolution_);
 
         addFreeSpaceDilation(currentGlobalMap_);
         
@@ -1096,10 +1094,12 @@ public:
 
             Mat explorationImgMap = currentAlgoMap_.clone();
             // set the unreached goals on the exploration map
+            
             for(int i = 0; i < unreachedPointFromFronitiers.size(); i++ ){
                 
-                int radiusPix = (1.0 / mapResolution_) * (robot_radius_meters_ );    
-                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));            }
+                int radiusPix = (1.0 / mapResolution_) * (walls_inflation_m_ );    
+                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));        
+            }
 
             switch (explore_state_){
 
@@ -1283,8 +1283,7 @@ public:
                     cerr<<" cccccccccccccccccc currentPosition for patthern "<<currentPosition<<endl;
                     path_ =
                         disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix(), 
-                                                                wanted_coverage_score_);
+                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix());
 
 
                     // convert the path into poses
@@ -1573,37 +1572,37 @@ public:
     }
 
 
-    void addGoalNearbyCameraScan() {
+    // void addGoalNearbyCameraScan() {
 
-        for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
+    //     for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
-            auto goalFromPath = path_poses_with_status_.coveragePathPoses_[i];
+    //         auto goalFromPath = path_poses_with_status_.coveragePathPoses_[i];
 
-            for( int j = 0; j < currentCameraScanMapPointsM_.size(); j++ ) { 
+    //         for( int j = 0; j < currentCameraScanMapPointsM_.size(); j++ ) { 
 
-                auto pCameraScanOnMap = currentCameraScanMapPointsM_[j];
+    //             auto pCameraScanOnMap = currentCameraScanMapPointsM_[j];
 
-                float distM = 
-                    goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
-                        pCameraScanOnMap);
+    //             float distM = 
+    //                 goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
+    //                     pCameraScanOnMap);
 
-                if( distM < (robot_radius_meters_ ) ) {
+    //             if( distM < (walls_inflation_m_ ) ) {
 
-                    path_poses_with_status_.setStatByIndex(i, true);
-                }
+    //                 path_poses_with_status_.setStatByIndex(i, true);
+    //             }
 
-            }
+    //         }
 
-        }
+    //     }
         
-    }
+    // }
     
     void saveCoverageImg(){
 
-        if( !imgSaved_ && mapping_map_.data){
+        if( !imgSaved_ && currentGlobalMap_.data){
 
-            Mat patternImg = mapping_map_.clone();
-            Mat robotTreaceImg = mapping_map_.clone();
+            Mat patternImg = currentGlobalMap_.clone();
+            Mat robotTreaceImg = currentGlobalMap_.clone();
 
             cvtColor(patternImg, patternImg, COLOR_GRAY2BGR);
             cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
@@ -1725,8 +1724,6 @@ private:
 
     cv::Mat currentGlobalMap_;
 
-    cv::Mat mapping_map_;
-
     float map_origin_position_x = -1;
 
     float map_origin_position_y = -1;
@@ -1753,9 +1750,9 @@ private:
 
     bool reducing_goals_ = true;
 
-    float robotWidthM_ = 0.53;
-    float robotHeightM_ = 0.53;
-    double robot_radius_meters_ = 0.2;
+    double robot_w_m_ = 0.53;
+    double robot_h_m_ = 0.53;
+    double walls_inflation_m_ = 0.3;
 
     double radius_for_cleaning_route_goals_ = 0.2;
 
@@ -1836,7 +1833,7 @@ int main(int argc, char **argv)
 
     
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
-//     float robot_radius_meters_ = 0.2;
+//     float walls_inflation_m_ = 0.2;
 
 //     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/bugs/1/map.pgm",0);
 
@@ -1849,7 +1846,7 @@ int main(int argc, char **argv)
 //     // imwrite("/home/yakir/distance_transform_coverage_ws/bugs/1/dbg.png", currentAlgoMap_);
 //     // return 0;
    
-//     addDilationForGlobalMap(currentAlgoMap_, robot_radius_meters_, mapResolution_);
+//     addDilationForGlobalMap(currentAlgoMap_, walls_inflation_m_, mapResolution_);
 //     addFreeSpaceDilation(currentAlgoMap_);
 
 //     if( false) {
