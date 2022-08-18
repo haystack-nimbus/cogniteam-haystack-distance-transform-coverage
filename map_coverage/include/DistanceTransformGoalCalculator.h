@@ -28,7 +28,7 @@ public:
 
         resolution_ = resolution;
     }
-    bool calcDistanceTransfromImg(const Mat &map, const cv::Point2d &goal,
+    bool calcDistanceTransfromImg(const Mat &map, cv::Point2d goal,
                                    cv::Mat &outputDistanceTransformImg, int mapIndex)
     {
 
@@ -75,11 +75,43 @@ public:
         // imshow("imgMap",imgMap);
         // waitKey(0);
 
-        if( !foundCont){
 
-            cerr<<" De"<<goal<<endl;
 
-            return false;
+        if( !foundCont ){
+
+            // the robot location is on obstacles but we have to contour of the map,
+            // the goal will be the current safe location
+            if( contours.size() == 1 ){
+
+                Mat dist;
+                distanceTransform(imgMap, dist, DIST_L2, 3);
+                // Normalize the distance image for range = {0.0, 1.0}
+                // so we can visualize and threshold it
+                normalize(dist, dist, 0, 1.0, NORM_MINMAX);
+            
+                double min, max; 
+                cv::Point minLoc;
+                cv::Point tmpGoal;
+                minMaxLoc(dist, &min, &max, &minLoc, &tmpGoal);
+
+                if( !(goal.x > 0 && goal.y > 0)){
+
+                    cerr<<" failed to find safe goal";
+                    return false;
+                } else {
+                    
+                    /// special case, we update the GOAL !!!
+                   goal = cv::Point2d(tmpGoal.x, tmpGoal.y);              
+                }
+            } 
+            else {
+
+                cerr<<" goal with ZERO contours !!"<<goal<<endl;
+
+                return false;
+            }
+             
+           
         }
 
 
