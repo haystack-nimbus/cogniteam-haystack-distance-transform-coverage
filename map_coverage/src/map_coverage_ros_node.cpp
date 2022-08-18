@@ -1694,14 +1694,22 @@ public:
                 }             
             }
 
-            // draw the robot trace
+            // draw the robot trace (INCLUDE DIMS)
             for( int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++){
 
 
                 cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
                 cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
 
-                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_); 
+                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_);      
+            }
+            // draw the trace only
+            for( int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++){
+
+
+                cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
+                cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
+
                 cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 0), 1);
      
             }
