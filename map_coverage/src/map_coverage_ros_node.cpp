@@ -453,11 +453,11 @@ public:
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
-                /// if we already set status to this goal
-                // if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
+                // if we already set status to this goal
+                if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
 
-                //     continue;
-                // }
+                    continue;
+                }
 
                 // transform to odom frame (global costmap framme)
                 cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
@@ -474,24 +474,34 @@ public:
                 
                 // get the cost value
                 int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
+                
 
+                //GOAL ON obstacle
                 if( costVal != 0 ){
                     
+                    float distRobotFromGoal = 
+                     goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+                         cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                             path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
 
-                    path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+                    if( distRobotFromGoal < 2.0 ){
 
-                    circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
+                        path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+                    } else {
 
+                        path_poses_with_status_.status_[i] == UN_COVERED;
 
-                } else if( costVal == 0 ){
+                        path_poses_with_status_.setStatByIndex(i, UN_COVERED);
 
+                    }                  
 
-                    circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
-                }
+                    // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
+
+                } 
             }
 
-            imwrite("/home/algo-kobuki/imgs/dbg.png", dbg);
-            imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
+            // imwrite("/home/algo-kobuki/imgs/dbg.png", dbg);
+            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
             
             startLocalCostMap_ = endLocalCostMap;
 
@@ -513,8 +523,7 @@ public:
         if (width_ != -1 && height_ != -1)
         {
             if (msg->info.width != width_ || msg->info.height != height_)
-            {
-                double old_origin_x = map_origin_position_x;
+            {                double old_origin_x = map_origin_position_x;
                 double old_origin_y = map_origin_position_y;
 
                 double new_origin_x = msg->info.origin.position.x;
