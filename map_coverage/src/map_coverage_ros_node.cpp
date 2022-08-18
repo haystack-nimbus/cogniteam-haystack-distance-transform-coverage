@@ -1494,23 +1494,17 @@ public:
                 path_poses_with_status_.status_[i] == COVERED) {
                 continue;
             }
-            cerr<<" robotHistoryPathMsg_.poses.size() "<<robotHistoryPathMsg_.poses.size()<<endl;
 
-            for(int j = 0; j < robotHistoryPathMsg_.poses.size(); j++ ){
+            auto RobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.szie() - 1];
 
-                auto RobotPose = robotHistoryPathMsg_.poses[j];
-
-                float distRobotFromGoal = 
-                     goalCalculator.distanceCalculate( cv::Point2d(RobotPose.pose.position.x, RobotPose.pose.position.y),
-                         cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
-                             path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
+            float distRobotFromGoal = 
+                    goalCalculator.distanceCalculate( cv::Point2d(RobotPose.pose.position.x, RobotPose.pose.position.y),
+                        cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                            path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
+        
+            if ( distRobotFromGoal < mapResolution_) {
             
-                if ( distRobotFromGoal < mapResolution_) {
-                
-                    path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
-                }
-            
-            
+                path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
             }        
 
         }
@@ -1615,12 +1609,11 @@ public:
                         goalCalculator.distanceCalculate(  cv::Point2d(currentRobotPose.pose.position.x, currentRobotPose.pose.position.y),
                             cv::Point2d(prevRobotPose.pose.position.x,  prevRobotPose.pose.position.y));
 
-                cerr<<" currentMovmentM "<<currentMovmentM<<endl;
                 // if this is the first time we see that the robot doesnt move
                 if ( !initReverseRecovery ) {
 
                     // if the robot doesnt move 
-                    if( currentMovmentM < 0.1 ) {
+                    if( currentMovmentM == 0.0 ) {
 
                         cerr<<" ROOOOOOOOOOOOBOT NOT MOVING !!! "<<endl;   
                         // init the timer of now moving
