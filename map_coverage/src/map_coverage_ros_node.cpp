@@ -1628,9 +1628,10 @@ public:
                 auto prevRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 2 ];
 
                 float currentMovmentM = 
-                        goalCalculator.distanceCalculate(  cv::Point2d(currentRobotPose.pose.position.x, robotPose_.pose.position.y),
+                        goalCalculator.distanceCalculate(  cv::Point2d(currentRobotPose.pose.position.x, currentRobotPose.pose.position.y),
                             cv::Point2d(prevRobotPose.pose.position.x,  prevRobotPose.pose.position.y));
 
+                cerr<<" currentMovmentM "<<currentMovmentM<<endl;
                 // if this is the first time we see that the robot doesnt move
                 if ( !initReverseRecovery ) {
 
@@ -1766,9 +1767,9 @@ public:
                 cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
                 cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
 
+                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_); 
                 cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 0), 1);
-                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_);      
-      
+     
             }
 
 
