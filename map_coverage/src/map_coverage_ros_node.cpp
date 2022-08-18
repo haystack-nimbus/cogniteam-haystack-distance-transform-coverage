@@ -99,11 +99,19 @@ bool exit_ = false;
 
 
 
+enum GoalState
+{
+    UN_COVERED = 0,
+    COVERED  = 1,
+    COVERED_BY_ROBOT_PATH = 2,
+    COVERED_BY_OBSTACLE = 3    
+};    
+
 struct Path_with_Status
 {
     vector<geometry_msgs::PoseStamped> coveragePathPoses_;
 
-    vector<bool> status_;
+    vector<GoalState> status_;
 
     void initStatusList( ){
 
@@ -111,12 +119,12 @@ struct Path_with_Status
 
         for( int i = 0; i < status_.size(); i++){
 
-            setStatByIndex(i, false);
+            setStatByIndex(i, UN_COVERED);
         }
 
     }
 
-    void setStatByIndex(int index, bool status) {
+    void setStatByIndex(int index, GoalState status) {
 
         status_[index] = status;
     }
@@ -456,7 +464,7 @@ public:
                 if( costVal != 0 ){
                     
 
-                    path_poses_with_status_.setStatByIndex(i, true);
+                    path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
 
                     // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
@@ -675,18 +683,34 @@ public:
                 m.scale.z = 0.1;
                 m.color.a = 1.0;
 
-                //checked
+                //checked             
 
-                if( path_poses_with_status_.status_[i]){
+
+                /// COVERED = BLACK
+                if( path_poses_with_status_.status_[i] == COVERED){
 
                     m.color.r = 0;
                     m.color.g = 0.0;
                     m.color.b = 0.0;
 
-                } else {
+                }  /// UN_COVERED = GREEN 
+                else if( path_poses_with_status_.status_[i] == UN_COVERED){
 
                     m.color.r = 0.0;
                     m.color.g = 1.0;
+                    m.color.b = 0.0;
+
+                }   /// COVERED_BY_ROBOT_PATH = LIGHT BLUE 
+                else if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH){
+
+                    m.color.r = 0.0;
+                    m.color.g = 1.0;
+                    m.color.b = 1.0;
+                }   /// COVERED_BY_ROBOT_PATH = LIGHT BLUE 
+                else if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH){
+
+                    m.color.r = 1.0;
+                    m.color.g = 0.0;
                     m.color.b = 0.0;
                 }
                
@@ -1311,13 +1335,13 @@ public:
                         publishRobotHistoryPath();
 
                         // the waypoint is checked (black)
-                        if( path_poses_with_status_.status_[i] == true ){
+                        if( path_poses_with_status_.status_[i] != UN_COVERED ){
                             continue;
                         }
 
                         // set the orientation of the goal dynamically
                         
-                        if (true) {
+                        if (false) {
 
                             float angleRobot2Goal = 
                                 -1.0 * atan2 (robotPose_.pose.position.y - path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 
@@ -1329,10 +1353,10 @@ public:
                         }
                         
 
-                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], true);
+                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
 
                         // set way[oint as checked
-                        path_poses_with_status_.setStatByIndex(i, true );
+                        path_poses_with_status_.setStatByIndex(i, COVERED );
 
 
                         if( exit_){
@@ -1433,7 +1457,7 @@ public:
 
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
-            if( path_poses_with_status_.status_[i] == true ){
+            if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ){
                 continue;
             }
 
@@ -1444,7 +1468,7 @@ public:
            
            if ( distRobotFromGoal < mapResolution_) {
               
-                path_poses_with_status_.setStatByIndex(i, true);
+                path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
            }
 
         }
@@ -1501,7 +1525,7 @@ public:
         return "";
     }  
 
-    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg, bool checkCameraObs = false)
+    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg)
     {      
 
         //navigate to the point			
