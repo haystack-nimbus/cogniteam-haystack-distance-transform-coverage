@@ -436,12 +436,13 @@ public:
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
-
+            
+            costMapImg.setTo(255, costMapImg != 0);
 
             string global_costmap_frame = msg->header.frame_id;
 
-            // Mat dbg = costMapImg.clone();
-            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+            Mat dbg = costMapImg.clone();
+            cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
@@ -472,18 +473,18 @@ public:
 
                     path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
 
-                    // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
+                    circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
 
                 } else if( costVal == 0 ){
 
 
-                    // circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
+                    circle(dbg, pOnImg,  1, Scalar(0,0,255), -1, 8, 0);
                 }
             }
 
-            // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
-            // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
+            imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
             
             startLocalCostMap_ = endLocalCostMap;
 
@@ -713,7 +714,7 @@ public:
                     m.color.g = 1.0;
                     m.color.b = 1.0;
                 }   /// COVERED_BY_OBSTACLE = RED 
-                
+
                 else if( path_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE){
 
                     m.color.r = 1.0;
