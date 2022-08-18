@@ -1486,22 +1486,32 @@ public:
 
     void removeGoalsByRobotRout() {
 
+
+        cerr<<" robotHistoryPathMsg_.poses.size() "<<robotHistoryPathMsg_.poses.size()<<endl;
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
-
-            if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ){
+            /// if the goal already covered 
+            if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH || 
+                path_poses_with_status_.status_[i] == COVERED) {
                 continue;
             }
 
-            float distRobotFromGoal = 
-                     goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+            for(int j = 0; j < robotHistoryPathMsg_.poses.size(); i++ ){
+
+                auto RobotPose = robotHistoryPathMsg_.poses[j];
+
+                float distRobotFromGoal = 
+                     goalCalculator.distanceCalculate( cv::Point2d(RobotPose.pose.position.x, RobotPose.pose.position.y),
                          cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                              path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
-           
-           if ( distRobotFromGoal < mapResolution_) {
-              
-                path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
-           }
+            
+                if ( distRobotFromGoal < mapResolution_) {
+                
+                    path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
+                 }
+            
+            
+            }        
 
         }
     }
@@ -1595,34 +1605,8 @@ public:
 
             string strState = getMoveBaseState(move_base_state);
 
-
-
-
-            if( move_base_state == actionlib::SimpleClientGoalState::ACTIVE 
-                ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
-            { 
-                continue;
-            }    
-            
-            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){                
-
-                cerr<<"strState:  "<<strState<<endl;
-
-                result = true;
-                break;
-            }
-            else
-            {   
-                cerr<<"strState:  "<<strState<<endl;
-
-                result = false;
-                break;
-            } 
-
-
-
             /////// REVERSE RECOVERY SECTION //////////////////////////////////////////////////////
-            {
+            if(true) {
 
                 auto currentRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 1 ];
                 auto prevRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 2 ];
@@ -1700,6 +1684,34 @@ public:
                 }
 
             }
+
+
+
+
+            if( move_base_state == actionlib::SimpleClientGoalState::ACTIVE 
+                ||  move_base_state == actionlib::SimpleClientGoalState::PENDING)
+            { 
+                continue;
+            }    
+            
+            if( move_base_state == actionlib::SimpleClientGoalState::SUCCEEDED){                
+
+                cerr<<"strState:  "<<strState<<endl;
+
+                result = true;
+                break;
+            }
+            else
+            {   
+                cerr<<"strState:  "<<strState<<endl;
+
+                result = false;
+                break;
+            } 
+
+
+
+            
             
            
 
