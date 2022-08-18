@@ -433,6 +433,9 @@ public:
     
     void localCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
+
+        return;
+        
         auto endLocalCostMap = high_resolution_clock::now();
         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
 
