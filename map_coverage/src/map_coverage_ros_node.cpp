@@ -1882,26 +1882,25 @@ int main(int argc, char **argv)
 //     DisantanceMapCoverage disantanceMapCoverage(false);
 //     GoalCalculator goalCalculator;
 
-//     disantanceMapCoverage.setRobotWidthPix(robotWidthPix);
-//     disantanceMapCoverage.setRobotHeightPix(robotHeightPix);
+//     disantanceMapCoverage.setRectFreeSapceDim(robotWidthPix, robotHeightPix);
 
-//     cv::Point2d currentPosition(398,384);
+//     cv::Point2d currentPosition(277, 236);
 
 
 
     
 //     int pixDist = (1.0 / mapResolution_) * distBetweenGoalsM_;
-//     float walls_inflation_m_ = 0.2;
+//     float walls_inflation_m_ = 0.3;
 
 //     Mat currentAlgoMap_ = imread("/home/yakir/distance_transform_coverage_ws/bugs/1/map.pgm",0);
 
 //     cv::flip(currentAlgoMap_, currentAlgoMap_, 0);
 //     Mat mappingMap = currentAlgoMap_.clone();  
     
-//     cerr<<"111111111111111111111111111111111111 " <<endl;
+//     // cerr<<"111111111111111111111111111111111111 " <<endl;
     
-//     // circle(currentAlgoMap_, currentPosition, 2, Scalar(150), -1, 8, 0);
-//     // imwrite("/home/yakir/distance_transform_coverage_ws/bugs/1/dbg.png", currentAlgoMap_);
+//     // // circle(currentAlgoMap_, currentPosition, 2, Scalar(150), -1, 8, 0);
+//     // imwrite("/home/yakir/distance_transform_coverage_ws/bugs/1/dbg.pgm", currentAlgoMap_);
 //     // return 0;
    
 //     addDilationForGlobalMap(currentAlgoMap_, walls_inflation_m_, mapResolution_);
@@ -1953,7 +1952,7 @@ int main(int argc, char **argv)
 
 //         vector<cv::Point> path =
 //             disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-//                                                 goal, distanceTransformImg, pixDist, 0.90);          
+//                                                 goal, distanceTransformImg, pixDist);          
 
 
 

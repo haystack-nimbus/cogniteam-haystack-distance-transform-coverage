@@ -77,7 +77,7 @@ public:
 
         if( !foundCont){
 
-            cerr<<" DistanceTransformGoalCalculator foundCont false"<<goal<<endl;
+            cerr<<" De"<<goal<<endl;
 
             return false;
         }
