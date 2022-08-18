@@ -235,8 +235,8 @@ public:
 
           // subs
         global_cost_map_sub_ =
-            node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
-                                                     &MapCoverageManager::globalCostMapCallback, this);                                             
+            node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/local_costmap/costmap", 1,
+                                                     &MapCoverageManager::localCostMapCallback, this);                                             
 
                                                  
 
@@ -261,7 +261,7 @@ public:
         init_ = false;
 
         // global cost map
-        startGoblalCostMap_ = high_resolution_clock::now();
+        startLocalCostMap_ = high_resolution_clock::now();
 
         /// params
         mapResolution_ = -1;
@@ -426,10 +426,10 @@ public:
     }  
 
     
-    void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
+    void localCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
-        auto endGoblalCostMap = high_resolution_clock::now();
-        auto durationFromLastCalc = duration_cast<seconds>(endGoblalCostMap - startGoblalCostMap_).count();
+        auto endLocalCostMap = high_resolution_clock::now();
+        auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
 
         /// do this every 2 seconds
         if( init_ && durationFromLastCalc > 2.0) {
@@ -444,6 +444,12 @@ public:
             // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
+
+                /// if we already set status to this goal
+                if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
+
+                    continue;
+                }
 
                 // transform to odom frame (global costmap framme)
                 cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
@@ -479,7 +485,7 @@ public:
             // imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
             // imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
             
-            startGoblalCostMap_ = endGoblalCostMap;
+            startLocalCostMap_ = endLocalCostMap;
 
 
 
@@ -706,8 +712,9 @@ public:
                     m.color.r = 0.0;
                     m.color.g = 1.0;
                     m.color.b = 1.0;
-                }   /// COVERED_BY_ROBOT_PATH = LIGHT BLUE 
-                else if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH){
+                }   /// COVERED_BY_OBSTACLE = RED 
+                
+                else if( path_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE){
 
                     m.color.r = 1.0;
                     m.color.g = 0.0;
@@ -1457,6 +1464,7 @@ public:
 
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
+
             if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ){
                 continue;
             }
@@ -1801,7 +1809,7 @@ private:
 
     high_resolution_clock::time_point startingCoverageTime_;
 
-    high_resolution_clock::time_point startGoblalCostMap_;
+    high_resolution_clock::time_point startLocalCostMap_;
 
 
 };
