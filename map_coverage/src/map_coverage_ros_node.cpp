@@ -483,7 +483,7 @@ public:
                 }
             }
 
-            imwrite("/home/algo-kobuki/imgs/"+to_string(ccc)+"dbg.png", dbg);
+            imwrite("/home/algo-kobuki/imgs/dbg.png", dbg);
             imwrite("/home/algo-kobuki/imgs/gmapping.png", currentGlobalMap_);          
             
             startLocalCostMap_ = endLocalCostMap;
