@@ -236,7 +236,7 @@ public:
           // subs
         global_cost_map_sub_ =
             node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
-                                                     &MapCoverageManager::localCostMapCallback, this);                                             
+                                                     &MapCoverageManager::globalCostMapCallback, this);                                             
 
                                                  
 
@@ -431,7 +431,7 @@ public:
     }  
 
     
-    void localCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
+    void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
 
 
@@ -453,9 +453,10 @@ public:
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
-                // if we already set status to this goal
-                if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
-
+                // if this goal cant be n obstacle
+                if( path_poses_with_status_.status_[i] == COVERED || 
+                    path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ){
+                    
                     continue;
                 }
 
@@ -1567,11 +1568,7 @@ public:
 
         bool result = true;
 
-        bool initReverseRecovery = false;
-
-        auto startTimerRobotNotMoving = ros::WallTime::now();
-
-
+      
         while(ros::ok()) {
 
             ros::spinOnce();
@@ -1595,85 +1592,7 @@ public:
             moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
             auto move_base_state = moveBaseController_.moveBaseClient_.getState();
 
-            string strState = getMoveBaseState(move_base_state);
-
-            /////// REVERSE RECOVERY SECTION //////////////////////////////////////////////////////
-            if(true) {
-
-                auto currentRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 1 ];
-                auto prevRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 2 ];
-
-                float currentMovmentM = 
-                        goalCalculator.distanceCalculate(  cv::Point2d(currentRobotPose.pose.position.x, currentRobotPose.pose.position.y),
-                            cv::Point2d(prevRobotPose.pose.position.x,  prevRobotPose.pose.position.y));
-
-                // if this is the first time we see that the robot doesnt move
-                if ( !initReverseRecovery ) {
-
-                    // if the robot doesnt move 
-                    if( currentMovmentM == 0.0 ) {
-
-                        cerr<<" ROOOOOOOOOOOOBOT NOT MOVING !!! "<<endl;   
-                        // init the timer of now moving
-                        startTimerRobotNotMoving = ros::WallTime::now();
-
-                        initReverseRecovery = true;
-
-                    } 
-                    else { 
-
-                        // the robot moved
-                        initReverseRecovery = false;
-                    }
-
-                } 
-                else {
-
-                    // we already init the timer, lets check if the robot still stuck
-                    // if the robot not moving   
-                    if ( currentMovmentM < 0.1 ) {
-
-                        cerr<<" ROOOOOOOOOOOOBOT NOT MOVING !!! "<<endl;   
-    
-                        auto end = ros::WallTime::now();
-                        auto duration = (end - startTimerRobotNotMoving).toSec();
-
-                        bool needToExecuteRevers = false;
-                        
-                        // if the robot not moving above 3 seconds
-                        if ( duration > 3.0 ) {
-
-                            auto robotPix = convertPoseToPix(robotPose_);
-
-                            // if the robot inside obstacle
-                            cv::Rect r(robotPix.x - (robot_w_m_ ), robotPix.y - (robot_w_m_), 
-                                robot_w_m_ * 2 , robot_w_m_ * 2);
-
-                            for( int x = r.x; x < r.x + r.width; x++){
-                                for( int y = r.y; y < r.y + r.height; y++){
-                                    
-                                    cv::Point2d pInBox(x, y);
-
-                                    if ((int)currentAlgoMap_.at<uchar>(pInBox.y, pInBox.x) == 0)
-                                    {
-                                        needToExecuteRevers = true;
-                                    }
-                                }
-                            }
-
-                            cerr<<" NEEEEEEEED RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR "<<endl;
-
-
-                        }
-                    } else {
-
-                        initReverseRecovery = false;
-                    }
-
-                }
-
-            }
-
+            string strState = getMoveBaseState(move_base_state);            
 
 
 
@@ -1697,15 +1616,7 @@ public:
                 result = false;
                 break;
             } 
-
-
-
-            
-            
-           
-
-
-          
+         
 
             ros::spinOnce();
         }  
@@ -1714,6 +1625,28 @@ public:
 
         return result;
     }
+
+
+    // void makeReverseIfNeeded() {
+
+    //     /// TO-DO
+    //    // if the robot inside obstacle
+    //     cv::Rect r(robotPix.x - (robot_w_m_ ), robotPix.y - (robot_w_m_), 
+    //         robot_w_m_ * 2 , robot_w_m_ * 2);
+
+    //     for( int x = r.x; x < r.x + r.width; x++){
+    //         for( int y = r.y; y < r.y + r.height; y++){
+                
+    //             cv::Point2d pInBox(x, y);
+
+    //             if ((int)currentAlgoMap_.at<uchar>(pInBox.y, pInBox.x) == 0)
+    //             {
+    //                 needToExecuteRevers = true;
+    //             }
+    //         }
+    //     }
+
+    // }
 
 
 
