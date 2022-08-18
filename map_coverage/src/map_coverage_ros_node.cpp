@@ -1487,7 +1487,6 @@ public:
     void removeGoalsByRobotRout() {
 
 
-        cerr<<" robotHistoryPathMsg_.poses.size() "<<robotHistoryPathMsg_.poses.size()<<endl;
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
             /// if the goal already covered 
@@ -1495,8 +1494,9 @@ public:
                 path_poses_with_status_.status_[i] == COVERED) {
                 continue;
             }
+            cerr<<" robotHistoryPathMsg_.poses.size() "<<robotHistoryPathMsg_.poses.size()<<endl;
 
-            for(int j = 0; j < robotHistoryPathMsg_.poses.size(); i++ ){
+            for(int j = 0; j < robotHistoryPathMsg_.poses.size(); j++ ){
 
                 auto RobotPose = robotHistoryPathMsg_.poses[j];
 
@@ -1508,7 +1508,7 @@ public:
                 if ( distRobotFromGoal < mapResolution_) {
                 
                     path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
-                 }
+                }
             
             
             }        
@@ -1670,10 +1670,8 @@ public:
                                 }
                             }
 
-                            for(int i = 0;  i < 100; i++ ){
+                            cerr<<" NEEEEEEEED RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR "<<endl;
 
-                                cerr<<" NEEEEEEEED RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR "<<endl;
-                            }
 
                         }
                     } else {
