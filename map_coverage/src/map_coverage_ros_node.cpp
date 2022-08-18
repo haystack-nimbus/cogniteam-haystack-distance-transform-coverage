@@ -452,10 +452,10 @@ public:
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
                 /// if we already set status to this goal
-                if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
+                // if( !(path_poses_with_status_.status_[i] == UN_COVERED)){
 
-                    continue;
-                }
+                //     continue;
+                // }
 
                 // transform to odom frame (global costmap framme)
                 cv::Point3d p = cv::Point3d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x, 
@@ -471,7 +471,7 @@ public:
                 cv::Point pOnImg = cv::Point(xPix, yPix);
                 
                 // get the cost value
-                int costVal = costMapImg.at<int8_t>(pOnImg.y, pOnImg.x);
+                int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
 
                 if( costVal != 0 ){
                     
