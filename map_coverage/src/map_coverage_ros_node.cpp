@@ -1668,7 +1668,7 @@ public:
             for( int i = 0; i < path_.size(); i++){
 
                 if( i > 0 ){
-                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), robot_w_m_ /  mapResolution_);
+                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), 1);
                 }             
             }
 
@@ -1679,7 +1679,9 @@ public:
                 cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
                 cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
 
+                cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 0), 1);
                 cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_);      
+      
             }
 
 
