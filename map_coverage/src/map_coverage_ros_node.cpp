@@ -295,6 +295,11 @@ public:
 
     }
 
+    void setCoverageState(bool coverageState){
+
+        coverageStateStarts_ = coverageState;
+    }
+
     static void mySigintHandler(int sig, void *ptr)
     {   
 
@@ -432,7 +437,7 @@ public:
         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
 
         /// do this every 2 seconds
-        if( init_ && durationFromLastCalc > 2.0) {
+        if( init_ && durationFromLastCalc > 2.0 && coverageStateStarts_) {
 
             cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
             memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
@@ -1689,6 +1694,7 @@ public:
 
 private:
     COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE;
+    bool coverageStateStarts_ = false;
 
     EXPLORE_STATE explore_state_ = EXPLORE_STATE::NAV_TO_SAFEST_GOAL;
 
@@ -1822,11 +1828,15 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "map_coverage_exploration_node" , ros::init_options::NoSigintHandler);
 
     MapCoverageManager mapCoverageManager;
+    mapCoverageManager.setCoverageState(false);
+
     signal(SIGINT, (void (*)(int))MapCoverageManager::mySigintHandler); 
 
 
     if ( mapCoverageManager.exlpore()) {
         
+        mapCoverageManager.setCoverageState(true);
+
         mapCoverageManager.coverage();
 
     }
