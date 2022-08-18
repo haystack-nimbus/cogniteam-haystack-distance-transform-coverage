@@ -1563,8 +1563,13 @@ public:
         //navigate to the point			
         moveBaseController_.navigate(goalMsg);
 
-        auto start = ros::WallTime::now();
         bool result = true;
+
+        bool initReverseRecovery = false;
+
+        auto startTimerRobotNotMoving = ros::WallTime::now();
+
+
         while(ros::ok()) {
 
             ros::spinOnce();
@@ -1614,8 +1619,87 @@ public:
                 break;
             } 
 
-            auto end = ros::WallTime::now();
-            auto duration = (end - start).toSec();
+
+
+            /////// REVERSE RECOVERY SECTION //////////////////////////////////////////////////////
+            {
+
+                auto currentRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 1 ];
+                auto prevRobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() - 2 ];
+
+                float currentMovmentM = 
+                        goalCalculator.distanceCalculate(  cv::Point2d(currentRobotPose.pose.position.x, robotPose_.pose.position.y),
+                            cv::Point2d(prevRobotPose.pose.position.x,  prevRobotPose.pose.position.y));
+
+                // if this is the first time we see that the robot doesnt move
+                if ( !initReverseRecovery ) {
+
+                    // if the robot doesnt move 
+                    if( currentMovmentM < 0.1 ) {
+
+
+                        // init the timer of now moving
+                        startTimerRobotNotMoving = ros::WallTime::now();
+
+                        initReverseRecovery = true;
+
+                    } 
+                    else { 
+
+                        // the robot moved
+                        initReverseRecovery = false;
+                    }
+
+                } 
+                else {
+
+                    // we already init the timer, lets check if the robot still stuck
+                    // if the robot not moving   
+                    if ( currentMovmentM < 0.1 ) {
+                            
+                        auto end = ros::WallTime::now();
+                        auto duration = (end - startTimerRobotNotMoving).toSec();
+
+                        bool needToExecuteRevers = false;
+                        
+                        // if the robot not moving above 3 seconds
+                        if ( duration > 3.0 ) {
+
+                            auto robotPix = convertPoseToPix(robotPose_);
+
+                            // if the robot inside obstacle
+                            cv::Rect r(robotPix.x - (robot_w_m_ ), robotPix.y - (robot_w_m_), 
+                                robot_w_m_ * 2 , robot_w_m_ * 2);
+
+                            for( int x = r.x; x < r.x + r.width; x++){
+                                for( int y = r.y; y < r.y + r.height; y++){
+                                    
+                                    cv::Point2d pInBox(x, y);
+
+                                    if ((int)currentAlgoMap_.at<uchar>(pInBox.y, pInBox.x) == 0)
+                                    {
+                                        needToExecuteRevers = true;
+                                    }
+                                }
+                            }
+
+                            for(int i = 0;  i < 100; i++ ){
+
+                                cerr<<" NEEEEEEEED RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR "<<endl;
+                            }
+
+                        }
+                    } else {
+
+                        initReverseRecovery = false;
+                    }
+
+                }
+
+            }
+            
+           
+
 
           
 
@@ -1626,6 +1710,7 @@ public:
 
         return result;
     }
+
 
 
     // void addGoalNearbyCameraScan() {
