@@ -487,9 +487,9 @@ public:
                     if( distRobotFromGoal < 2.0 ){
 
                         path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+
                     } else {
 
-                        path_poses_with_status_.status_[i] == UN_COVERED;
 
                         path_poses_with_status_.setStatByIndex(i, UN_COVERED);
 
@@ -497,7 +497,11 @@ public:
 
                     // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
-                } 
+                } else {
+
+                    path_poses_with_status_.setStatByIndex(i, UN_COVERED);
+
+                }
             }
 
             // imwrite("/home/algo-kobuki/imgs/dbg.png", dbg);
