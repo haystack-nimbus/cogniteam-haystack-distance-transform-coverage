@@ -235,7 +235,7 @@ public:
 
           // subs
         global_cost_map_sub_ =
-            node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/local_costmap/costmap", 1,
+            node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
                                                      &MapCoverageManager::localCostMapCallback, this);                                             
 
                                                  
@@ -434,8 +434,7 @@ public:
     void localCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
 
-        return;
-        
+
         auto endLocalCostMap = high_resolution_clock::now();
         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
 
