@@ -564,6 +564,9 @@ public:
 
         currentGlobalMap_ = occupancyGridMatToGrayScale(tmp.clone());
 
+        mappingMap_ = currentAlgoMap_.clone();  
+
+
         addDilationForGlobalMap(currentGlobalMap_, walls_inflation_m_, mapResolution_);
 
         addFreeSpaceDilation(currentGlobalMap_);
@@ -1652,10 +1655,10 @@ public:
     
     void saveCoverageImg(){
 
-        if( !imgSaved_ && currentGlobalMap_.data){
+        if( !imgSaved_ && mappingMap_.data){
 
-            Mat patternImg = currentGlobalMap_.clone();
-            Mat robotTreaceImg = currentGlobalMap_.clone();
+            Mat patternImg = mappingMap_.clone();
+            Mat robotTreaceImg = mappingMap_.clone();
 
             cvtColor(patternImg, patternImg, COLOR_GRAY2BGR);
             cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
@@ -1665,7 +1668,7 @@ public:
             for( int i = 0; i < path_.size(); i++){
 
                 if( i > 0 ){
-                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), 2);
+                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), robot_w_m_ /  mapResolution_);
                 }             
             }
 
@@ -1676,7 +1679,7 @@ public:
                 cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
                 cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i+1]);
 
-                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), 2);      
+                cv::line(robotTreaceImg, p1, p2, Scalar(226, 43, 138), robot_w_m_ /  mapResolution_);      
             }
 
 
@@ -1777,6 +1780,8 @@ private:
     vector<cv::Point2d> currentCameraScanMapPointsM_;
 
     cv::Mat currentGlobalMap_;
+
+    Mat mappingMap_;
 
     float map_origin_position_x = -1;
 
