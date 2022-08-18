@@ -1495,10 +1495,8 @@ public:
                 continue;
             }
 
-            auto RobotPose = robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.szie() - 1];
-
             float distRobotFromGoal = 
-                    goalCalculator.distanceCalculate( cv::Point2d(RobotPose.pose.position.x, RobotPose.pose.position.y),
+                    goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
                         cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                             path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
         
