@@ -564,7 +564,7 @@ public:
 
         currentGlobalMap_ = occupancyGridMatToGrayScale(tmp.clone());
 
-        mappingMap_ = currentAlgoMap_.clone();  
+        mappingMap_ = currentGlobalMap_.clone();  
 
 
         addDilationForGlobalMap(currentGlobalMap_, walls_inflation_m_, mapResolution_);
@@ -1637,7 +1637,7 @@ public:
                     // if the robot doesnt move 
                     if( currentMovmentM < 0.1 ) {
 
-
+                        cerr<<" ROOOOOOOOOOOOBOT NOT MOVING !!! "<<endl;   
                         // init the timer of now moving
                         startTimerRobotNotMoving = ros::WallTime::now();
 
@@ -1656,7 +1656,9 @@ public:
                     // we already init the timer, lets check if the robot still stuck
                     // if the robot not moving   
                     if ( currentMovmentM < 0.1 ) {
-                            
+
+                        cerr<<" ROOOOOOOOOOOOBOT NOT MOVING !!! "<<endl;   
+    
                         auto end = ros::WallTime::now();
                         auto duration = (end - startTimerRobotNotMoving).toSec();
 
