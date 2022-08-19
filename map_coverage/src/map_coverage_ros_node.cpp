@@ -475,32 +475,49 @@ public:
                 
                 // get the cost value
                 int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
-                
 
-                //GOAL ON obstacle
-                if( costVal != 0 ){
-                    
-                    float distRobotFromGoal = 
+                float distRobotFromGoal = 
                      goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
                          cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                              path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
+                
 
+                //GOAL ON obstacle
+                if( costVal != 0 ){     
+
+
+                    // the goal inside the wanted radius
                     if( distRobotFromGoal < 2.0 ){
 
                         path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
 
                     } else {
 
-
+                        /// goal outside the raius, make it uncovered
                         path_poses_with_status_.setStatByIndex(i, UN_COVERED);
 
                     }                  
 
                     // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
-                } else {
+                } /// goal not inside obstacle 
+                else {                   
 
-                    path_poses_with_status_.setStatByIndex(i, UN_COVERED);
+
+                    // if inside radius but last time int was inside obstacle,
+                    // keep it as obstacle
+                    if( distRobotFromGoal < 2.0 &&  
+                         path_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE) {
+
+
+                        path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+    
+                            
+                    } else {
+
+                        path_poses_with_status_.setStatByIndex(i, UN_COVERED);
+
+                    }
 
                 }
             }
@@ -1501,7 +1518,7 @@ public:
                         cv::Point2d(path_poses_with_status_.coveragePathPoses_[i].pose.position.x,
                             path_poses_with_status_.coveragePathPoses_[i].pose.position.y));
         
-            if ( distRobotFromGoal < mapResolution_) {
+            if ( distRobotFromGoal < robot_w_m_ / 2.0) {
             
                 path_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
             }        
