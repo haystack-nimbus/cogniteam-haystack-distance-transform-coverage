@@ -364,7 +364,15 @@ public:
 
             switch (explore_state_){
 
-                
+                case IDLE:
+                {
+                    cerr<<"IDLE "<<endl;
+
+                    startingTime_ = getCurrentTime();
+
+                    explore_state_ = NAV_TO_NEXT_FRONTIER;
+                    break;
+                }
                 case NAV_TO_NEXT_FRONTIER:
                 {   
 
@@ -581,6 +589,7 @@ public:
                     cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
                     cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
 
+                    makeReverseIfNeeded();
 
                     bool result = sendGoal(startingLocation_);
 
@@ -1981,12 +1990,10 @@ private:
 
 
             // draw the pattern
-            for( int i = 0; i < path_poses_with_status_.path_.size(); i++){
-
-                if( i > 0 ){
-                    cv::line(patternImg, path_poses_with_status_.path_[i], 
-                        path_poses_with_status_.path_[i - 1], Scalar(34, 139, 139), 1);
-                }             
+            for( int i = 0; i < path_poses_with_status_.path_.size() -1; i++) {
+                    
+                cv::line(patternImg, path_poses_with_status_.path_[i], 
+                        path_poses_with_status_.path_[i + 1], Scalar(34, 139, 139), 1);             
             }
 
             // draw the robot trace (INCLUDE DIMS)
@@ -2010,39 +2017,10 @@ private:
             }
 
             // draw the grid
-            for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ) {  
-                switch (path_poses_with_status_.status_[i])
-                {
-                    case UN_COVERED:
-                    {
-                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,255,0), -1, 8, 0);
-                        break;
+            for(int i = 0; i < path_poses_with_status_.path_.size(); i++ ) {  
 
-                    }
-                    case COVERED:
-                    {
-                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,0,0), -1, 8, 0);
-                        break;
-
-                    }
-                    case COVERED_BY_ROBOT_PATH:
-                    {
-                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(250,206,135), -1, 8, 0);
-                        break; 
-
-                    }  
-                     case COVERED_BY_OBSTACLE:
-                    {
-                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,0,255), -1, 8, 0);
-                        break; 
-
-                    }  
-                   
-                }
-               
-
+                circle(robotTreaceImg, path_poses_with_status_.path_[i], 3, Scalar(180,105,255), -1, 8, 0);
             }
-
 
             /*
                 Hi yakir,  can you change the file format  to these:
@@ -2075,7 +2053,7 @@ private:
     COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE;
     bool coverageStateStarts_ = false;
 
-    EXPLORE_STATE explore_state_ = EXPLORE_STATE::NAV_TO_NEXT_FRONTIER;
+    EXPLORE_STATE explore_state_ = EXPLORE_STATE::IDLE;
 
     // move-base
     MoveBaseController moveBaseController_;
