@@ -2019,7 +2019,7 @@ private:
             // draw the grid
             for(int i = 0; i < path_poses_with_status_.path_.size(); i++ ) {  
 
-                circle(robotTreaceImg, path_poses_with_status_.path_[i], 3, Scalar(180,105,255), -1, 8, 0);
+                circle(robotTreaceImg, path_poses_with_status_.path_[i], 1, Scalar(180,105,255), -1, 8, 0);
             }
 
             /*
