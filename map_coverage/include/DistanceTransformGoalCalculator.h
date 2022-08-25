@@ -28,7 +28,7 @@ public:
 
         resolution_ = resolution;
     }
-    bool calcDistanceTransfromImg(const Mat &map, cv::Point2d goal,
+    bool calcDistanceTransfromImg(const Mat &map, cv::Point2d& goal,
                                    cv::Mat &outputDistanceTransformImg, int mapIndex)
     {
 
@@ -36,6 +36,11 @@ public:
         {
 
             cerr << "error goal out of map !! " << goal<<endl;
+            return false;
+        }
+
+        if( !map.data) {
+
             return false;
         }
         cv::Mat imgMap = map.clone();
@@ -67,7 +72,7 @@ public:
                 foundCont = true;
             } else {
                 
-                drawContours(imgMap, contours, i, Scalar(0), -1 );
+                //drawContours(imgMap, contours, i, Scalar(0), -1 );
  
             }
         }
@@ -108,22 +113,27 @@ public:
                 
                 /// bug with finding contoures, pick the closest white pixel as goal
 
-
+                cerr<<" num of conts "<<contours.size()<<endl;
                 float minDistFromRobotPix = 9999;
                 bool found  = false;
-                cerr<<" goal with ZERO contours !!"<<goal<<endl;
+                cv::Point2d tmp;
+                cerr<<" goal with ZERO contours !!"<<goal<<" imgMap.rows "<<imgMap.rows<<" imgMap.cols "<<imgMap.cols<<endl;
                 for (int y = 0; y < imgMap.rows; y++)
                 {
                     for (int x = 0; x < imgMap.cols; x++)
                     {   
+                        int val = imgMap.at<uchar>(y, x);
                         if( x == goal.x && y == goal.y){
+
                             continue;
                         }
 
-                        if( imgMap.at<uchar>(y, x) != 255){
+                        if( val != 255){
                             continue;
                         }
-                        found = true;
+
+                        found = true;                       
+
                         float distWhiteFromRobot = 
                             distanceCalculate(cv::Point2d(x,y), goal);
 
@@ -131,15 +141,23 @@ public:
                             
                             minDistFromRobotPix = distWhiteFromRobot;
 
-                            goal = cv::Point2d(x,y);
+                            tmp = cv::Point2d(x,y);
                         }   
                     }
+                    
                 }
 
                 if( !found ){
+
+                    cerr<<" error cant !!!! found goal after find find the closest white pix "<<goal<<endl;
                     return false;
                 } else {
+                    
+                    circle(imgMap,goal, 5, Scalar(100), -1, 8, 0);      
+                    goal = cv::Point2d(tmp.x, tmp.y);
+                    circle(imgMap,goal, 5, Scalar(150), -1, 8, 0);      
 
+                    imwrite("/home/algo-kobuki/imgs/bad.png",imgMap);    
                     cerr<<" found goal after find find the closest white pix "<<goal<<endl;
                 }
             }
