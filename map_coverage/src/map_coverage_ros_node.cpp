@@ -141,7 +141,7 @@ struct Path_with_Status
 
         for(int i = 0; i < path.size(); i++ ){
 
-            path_.push_back(cv::Point2d(path[i].x, path[i].x));
+            path_.push_back(cv::Point2d(path[i].x, path[i].y));
         }
     }
 
@@ -517,6 +517,8 @@ public:
                         ros::spinOnce();
 
                         updateRobotLocation();
+
+                        removeGoalsByRobotRout();
 
                         percentCoverage_ = getCurrentPercentCoverage();
                         node_.setParam("/coverage/percentage", percentCoverage_);    
