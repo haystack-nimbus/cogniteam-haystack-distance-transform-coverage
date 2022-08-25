@@ -756,7 +756,7 @@ public:
             float robotRPix = (1.0 / globalMapResolution_) * (robot_w_m_ / 2 );
             // circle(dbg, robotPix, robotRPix , Scalar(0,255,255), 1, 8, 0);
 
-            float shiftFromCenter = 0.6;
+            float shiftFromCenter = 0.8;
             float zoneRPix = robotRPix + (1.0 / globalMapResolution_) * (shiftFromCenter / 2 );
 
             cv::Point2d robotHeadingPointFront(robotPix.x + ( zoneRPix ) * cos(robotHeading),
@@ -811,7 +811,7 @@ public:
                     //we can publish reverse
 
                     ros::Rate rate(1);
-                    float maxReversDuration = 2.0;
+                    float maxReversDuration = 3.0;
 
                     geometry_msgs::Twist velocity;
                     velocity.linear.x = -0.2;

@@ -105,10 +105,43 @@ public:
                 }
             } 
             else {
+                
+                /// bug with finding contoures, pick the closest white pixel as goal
 
+
+                float minDistFromRobotPix = 9999;
+                bool found  = false;
                 cerr<<" goal with ZERO contours !!"<<goal<<endl;
+                for (int y = 0; y < imgMap.rows; y++)
+                {
+                    for (int x = 0; x < imgMap.cols; x++)
+                    {   
+                        if( x == goal.x && y == goal.y){
+                            continue;
+                        }
 
-                return false;
+                        if( imgMap.at<uchar>(y, x) != 255){
+                            continue;
+                        }
+                        found = true;
+                        float distWhiteFromRobot = 
+                            distanceCalculate(cv::Point2d(x,y), goal);
+
+                        if( distWhiteFromRobot < minDistFromRobotPix){
+                            
+                            minDistFromRobotPix = distWhiteFromRobot;
+
+                            goal = cv::Point2d(x,y);
+                        }   
+                    }
+                }
+
+                if( !found ){
+                    return false;
+                } else {
+
+                    cerr<<" found goal after find find the closest white pix "<<goal<<endl;
+                }
             }
              
            
@@ -340,6 +373,18 @@ private:
             }
         }
         return r;
+    }
+
+    double distanceCalculate(cv::Point2d p1, cv::Point2d p2)
+    {
+        double x = p1.x - p2.x; //calculating number to square in next step
+        double y = p1.y - p2.y;
+        double dist;
+
+        dist = pow(x, 2) + pow(y, 2); //calculating Euclidean distance
+        dist = sqrt(dist);
+
+        return dist;
     }
 
 private:
