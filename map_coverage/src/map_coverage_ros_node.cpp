@@ -57,6 +57,9 @@
 #include <boost/algorithm/string.hpp>
 #include <opencv2/opencv.hpp>
 
+#include <geometry_msgs/PolygonStamped.h>
+
+
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 
@@ -113,6 +116,9 @@ struct Path_with_Status
 
     vector<GoalState> status_;
 
+    vector<cv::Point> path_; // for display on image
+
+
     void initStatusList( ){
 
         status_.resize(coveragePathPoses_.size());
@@ -127,6 +133,16 @@ struct Path_with_Status
     void setStatByIndex(int index, GoalState status) {
 
         status_[index] = status;
+    }
+
+    void setPixelsPath(const  vector<cv::Point>& path){
+
+        path_.resize(path.size());
+
+        for(int i = 0; i < path.size(); i++ ){
+
+            path_.push_back(cv::Point2d(path[i].x, path[i].x));
+        }
     }
 
 };
@@ -200,10 +216,10 @@ public:
     MapCoverageManager()
     {
 
-        cerr<<" wait for move-base server "<<endl;
-        moveBaseController_.waitForServer(ros::Duration(10.0));
-        ros::Duration(1).sleep();
-        cerr << " exploration is now connecting with move-base !! " << endl;
+        // cerr<<" wait for move-base server "<<endl;
+        // moveBaseController_.waitForServer(ros::Duration(10.0));
+        // ros::Duration(1).sleep();
+        // cerr << " exploration is now connecting with move-base !! " << endl;
 
         // rosparam
         ros::NodeHandle nodePrivate("~");
@@ -237,10 +253,16 @@ public:
         global_cost_map_sub_ =
             node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
                                                      &MapCoverageManager::globalCostMapCallback, this);                                             
-
+        robot_footprint_sub_ =
+             node_.subscribe<geometry_msgs::PolygonStamped>("/move_base/local_costmap/footprint", 1,
+                                                      &MapCoverageManager::footprintCallback, this); 
                                                  
 
         // pubs
+
+        reverse_cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>(		
+        	"/cmd_vel", 1, false);
+
         cuurentCoveragePathPub_ = node_.advertise<nav_msgs::Path>(
             "/coverage_path", 1, false); 
 
@@ -295,6 +317,668 @@ public:
 
     }
 
+    bool exlpore()
+    {
+        string m = "";
+
+        vector<cv::Point2d> unreachedPointFromFronitiers;
+
+        while (ros::ok())
+        {
+            ros::spinOnce();
+
+
+            if (exit_){
+
+                return false;
+            }
+
+
+            if (!init_)
+            {
+                cerr << "map not recieved !!" << endl;
+
+                continue;;
+            }
+
+            if ( !updateRobotLocation())
+            {
+                cerr << "can't update robot location !!" << endl;
+
+                continue;
+            }     
+
+            node_.setParam("/coverage/state", "RUNNING");      
+
+            currentAlgoMap_ = getCurrentMap();
+
+            Mat explorationImgMap = currentAlgoMap_.clone();
+            
+            // set the unreached goals on the exploration map
+            
+            for(int i = 0; i < unreachedPointFromFronitiers.size(); i++ ){
+                
+                int radiusPix = (1.0 / mapResolution_) * (walls_inflation_m_ );    
+                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));        
+            }
+
+            switch (explore_state_){
+
+                
+                case NAV_TO_NEXT_FRONTIER:
+                {   
+
+                    cerr<<"NAV_TO_NEXT_FRONTIER "<<endl;
+
+                    float mapScore = 0.0;
+
+                    auto robotPix = convertPoseToPix(robotPose_);
+
+                    std::vector<Frontier> currentEdgesFrontiers;
+                    mapScore = goalCalculator.calcEdgesFrontiers(explorationImgMap,
+                                          currentEdgesFrontiers, robotPix, mapResolution_);
+
+                    cerr<<"map exploration score: "<<mapScore<<endl;
+                    
+
+                    if( currentEdgesFrontiers.size() == 0){
+
+                        explore_state_ = FINISH_EXPLORE;
+                        break;
+                    }
+
+
+                    geometry_msgs::Quaternion q;
+                    q.w = 1;
+                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);                               
+
+                    
+                    publishEdgesFrontiers(currentEdgesFrontiers);
+                    
+                    makeReverseIfNeeded();
+
+                    bool result = sendGoal(nextFrontierGoal);
+
+                    if( !result) {
+
+                        unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
+                    }
+
+
+                    cerr<<"move_base result for NAV_TO_NEXT_FRONTIER "<<result<<endl;
+
+                    
+                    explore_state_ = NAV_TO_NEXT_FRONTIER;
+
+                    break;
+                }
+                case ERROR_EXPLORE:
+                {
+                    node_.setParam("/coverage/state", "STOPPED");
+
+                    cerr<<"ERROR_EXPLORE "<<endl;
+                    break;
+                }
+                case FINISH_EXPLORE:
+                {                  
+     
+                    
+                    return true;
+                }
+
+            }
+
+        }
+        
+        return false;
+    }
+
+    void coverage()
+    {   
+
+        int countNumberOfTriesFinsihGoal = 0;
+        
+        while (ros::ok())
+        {
+            ros::spinOnce();
+
+            
+            if (!init_)
+            {
+
+                continue;
+            }
+
+            if (!updateRobotLocation())
+            {
+
+                continue;
+            }  
+
+            
+
+            switch (coverage_state_)
+            {   
+                
+                case COVERAGE:
+                {
+                    cerr << " COVERAGE " << endl;
+
+                    currentAlgoMap_ = getCurrentMap();
+
+                    // calculate goal-distance-transform-map
+                    cv::Mat distanceTransformImg;
+
+                    auto currentPosition = convertPoseToPix(startingLocation_);
+
+                    cerr<<" currentPosition "<<currentPosition<<endl;
+
+
+                    cv::Point2d goal = currentPosition;
+
+
+                    // // calc the distance-transform-img from current goal
+                    if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
+                        currentPosition, distanceTransformImg, 1)){
+
+                        cerr<<" failed to calcutate the disntace transform img"<<endl;   
+                        coverage_state_ = ERROR_COVERAGE;
+                        break;
+ 
+                    }
+
+                    Mat grayDistImg;
+                    distanceTransformGoalCalculator.normalizeDistanceTransform(distanceTransformImg, grayDistImg);
+
+
+                    // Mat dbg = mapping_map_.clone();
+                    // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+
+                    // calc the path-coverage of the current blob
+                    
+                    cerr<<" cccccccccccccccccc currentPosition for patthern "<<currentPosition<<endl;
+                    auto path =
+                        disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
+                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix());
+
+
+                    // convert the path into poses
+                    path_poses_with_status_.setPixelsPath(path);
+                    path_poses_with_status_.coveragePathPoses_ = covertPointsPathToPoseRout(path);
+                    path_poses_with_status_.initStatusList();
+
+                    // exectute currnet navigation the blob-coverage
+                    cerr <<"cccccccccccc num of coverage waypoints " << 
+                        path_poses_with_status_.coveragePathPoses_.size() <<" path_ size is "<<path.size()<<endl;
+                    
+                    for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
+                    {   
+
+                        ros::spinOnce();
+
+                        updateRobotLocation();
+
+                        percentCoverage_ = getCurrentPercentCoverage();
+                        node_.setParam("/coverage/percentage", percentCoverage_);    
+                        
+                        publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
+
+
+                        publishRobotHistoryPath();
+
+                        // the waypoint is checked (black)
+                        if( path_poses_with_status_.status_[i] != UN_COVERED ){
+                            continue;
+                        }
+
+                        // set the orientation of the goal dynamically
+                        
+                        makeReverseIfNeeded();
+                        
+                        ros::spinOnce();
+                        
+
+                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
+
+                        // set way[oint as checked
+                        path_poses_with_status_.setStatByIndex(i, COVERED );
+
+
+                        if( exit_){
+
+                            return;
+                        }
+
+                        if (result)
+                        {
+                            cerr << i << ": Waypoint reached!" << endl;
+                        }
+                        else
+                        {
+                            cerr << i << ": Failed to reach waypoint" << endl;
+
+                        }
+                    }
+
+                    coverage_state_ = BACK_TO_STARTING_LOCATION;
+                    break;
+                }
+                case BACK_TO_STARTING_LOCATION:
+                {   
+                    cerr<<" BACK_TO_STARTING_LOCATION "<<endl; 
+
+                    if( countNumberOfTriesFinsihGoal > 3) {
+
+                        coverage_state_ = COVERAGE_DONE;  
+
+                        break; 
+                    }  
+            
+                    cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
+                    cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
+
+
+                    bool result = sendGoal(startingLocation_);
+
+                    if (result)
+                    {
+                        cerr <<"BACK_TO_STARTING_LOCATION reached!" << endl;
+
+                        coverage_state_ = COVERAGE_DONE;  
+
+                        break;
+
+                    }
+                    else
+                    {
+                        cerr <<" Failed to reach BACK_TO_STARTING_LOCATION, try again" << endl;
+
+                        coverage_state_ = BACK_TO_STARTING_LOCATION; 
+                        
+                        countNumberOfTriesFinsihGoal++;
+
+
+                        break;
+                    }
+
+                    
+                }
+                case COVERAGE_DONE:
+                {
+                    cerr<<" COVERAGE_DONE "<<endl;  
+
+                    node_.setParam("/coverage/state", "STOPPED");
+                    
+                    saveCoverageImg();
+
+                    coverage_state_ = COVERAGE_DONE;
+                    break;
+                }
+                
+                case ERROR_COVERAGE:
+                {   
+
+                    if(!errCoverage_)
+                    {
+                        cerr<<" ERROR_COVERAGE "<<endl; 
+                        errCoverage_ = true; 
+
+                    }
+                    
+                    node_.setParam("/coverage/state", "STOPPED");
+
+                    coverage_state_ = ERROR_COVERAGE;
+                    break;
+                }
+            }
+
+
+        }
+
+       
+    }   
+
+    float getCurrentPercentCoverage() {
+
+        if ( path_poses_with_status_.coveragePathPoses_.size() == 0 ){
+
+            return 0.0;
+        }
+
+        float countCovered = 0.0;
+
+        float countNeedToBeCovered = 0.0;
+ 
+        for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ) {  
+            switch (path_poses_with_status_.status_[i])
+            {
+                case UN_COVERED:
+                {
+                    countNeedToBeCovered += 1.0;
+                }
+                case COVERED:
+                {
+                    countNeedToBeCovered += 1.0;
+                    countCovered += 1.0;
+
+                }
+                case COVERED_BY_ROBOT_PATH:
+                {
+                    countNeedToBeCovered += 1.0;
+                    countCovered += 1.0; 
+
+                }  
+                case COVERED_BY_OBSTACLE:
+                {
+                    
+
+                } 
+                
+            }
+            
+
+        }
+
+        float percentCoverage = ( countCovered / countNeedToBeCovered)  * 100.0;
+
+        if( percentCoverage > 100){
+
+            percentCoverage = 100.0;
+        }
+
+        return percentCoverage;
+
+    }
+
+    bool makeReverseIfNeeded() {
+
+
+        if( !updateRobotLocation()){
+            return false;
+        }
+
+        if( !costMapImg_.data){
+
+            return false;
+        }
+
+        
+
+        tf::StampedTransform transform;
+
+        geometry_msgs::PoseStamped robotOdomPose;
+
+
+        try
+        {   
+
+            // get current robot pose ODOM frame !!
+            tfListener_.lookupTransform(odomFrame_, baseFrame_,
+                                        ros::Time(0), transform);
+
+            robotOdomPose.header.frame_id = odomFrame_;
+            robotOdomPose.header.stamp = ros::Time::now();
+            robotOdomPose.pose.position.x = transform.getOrigin().x();
+            robotOdomPose.pose.position.y = transform.getOrigin().y();
+            robotOdomPose.pose.position.z = 0;
+            robotOdomPose.pose.orientation.x = transform.getRotation().x();
+            robotOdomPose.pose.orientation.y = transform.getRotation().y();
+            robotOdomPose.pose.orientation.z = transform.getRotation().z();
+            robotOdomPose.pose.orientation.w = transform.getRotation().w();
+
+            float robotHeading  = atan2((2.0 *
+                (robotOdomPose.pose.orientation.w * robotOdomPose.pose.orientation.z + 
+                robotOdomPose.pose.orientation.x * robotOdomPose.pose.orientation.y)),
+                (1.0 - 2.0 * (robotOdomPose.pose.orientation.y * robotOdomPose.pose.orientation.y +
+                 robotOdomPose.pose.orientation.z * robotOdomPose.pose.orientation.z)));
+            
+            // convert odom pose to odom pix
+            cv::Point2d robotPix = cv::Point2d( (robotOdomPose.pose.position.x - globalMapOriginPositionX_) / globalMapResolution_,
+                (robotOdomPose.pose.position.y - globalMapOriginPositionY_) / globalMapResolution_ );
+
+
+            // Mat dbg = costMapImg_.clone();
+            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+
+            float robotRPix = (1.0 / globalMapResolution_) * (robot_w_m_ / 2 );
+            // circle(dbg, robotPix, robotRPix , Scalar(0,255,255), 1, 8, 0);
+
+            float shiftFromCenter = 0.6;
+            float zoneRPix = robotRPix + (1.0 / globalMapResolution_) * (shiftFromCenter / 2 );
+
+            cv::Point2d robotHeadingPointFront(robotPix.x + ( zoneRPix ) * cos(robotHeading),
+                                                    robotPix.y + ( zoneRPix ) * sin(robotHeading));
+
+            cv::Point2d robotHeadingPointBack(robotPix.x + (zoneRPix) * -1* cos(robotHeading),
+                                                    robotPix.y + (zoneRPix) * -1* sin(robotHeading));
+
+            // cv::arrowedLine(dbg, robotPix, robotHeadingPointFront, Scalar(0, 255, 0), 2);
+
+            // cv::arrowedLine(dbg, robotPix, robotHeadingPointBack, Scalar(0, 0, 255), 2);
+
+            // circle(dbg, robotPix, zoneRPix , Scalar(255,0,255), 1, 8, 0);
+
+
+
+            // check if robot blocked in front
+            cv::LineIterator it_map_front(costMapImg_, robotPix, robotHeadingPointFront, 4);  // 4 more dense than 8
+            
+            bool blockedInFront = false;
+            for (int j = 0; j < it_map_front.count; j++, ++it_map_front)
+            {
+                cv::Point2d pointBeam = it_map_front.pos();
+                int valueTemp = costMapImg_.at<uchar>(pointBeam.y, pointBeam.x);
+                if (valueTemp == 255)
+                {
+                    blockedInFront = true;
+                    break;
+                }
+            }
+
+            if( blockedInFront ) {
+
+                // check if clear behind the robot
+
+                cv::LineIterator it_map_back(costMapImg_, robotPix, robotHeadingPointBack, 4);  // 4 more dense than 8
+
+                bool clearInBack = true;
+                for (int j = 0; j < it_map_back.count; j++, ++it_map_back)
+                {
+                    cv::Point2d pointBeam = it_map_back.pos();
+                    int valueTemp = costMapImg_.at<uchar>(pointBeam.y, pointBeam.x);
+                    if (valueTemp == 255)
+                    {
+                        clearInBack = false;
+                        break;
+                    }
+                }
+
+                if ( clearInBack ){
+
+                    //we can publish reverse
+
+                    ros::Rate rate(1);
+                    float maxReversDuration = 2.0;
+
+                    geometry_msgs::Twist velocity;
+                    velocity.linear.x = -0.2;
+
+                    auto startTime = ros::WallTime::now();
+
+                    while (ros::ok()) {
+
+                        cerr<<" REEEEEEVERSE !!!!!!!!!! "<<endl;
+                        reverse_cmd_vel_pub_.publish(velocity);
+                        rate.sleep();
+
+                        auto end = ros::WallTime::now();
+
+                        auto duration = (end - startTime).toSec();
+                        if( duration > maxReversDuration){
+                            break;
+                        }
+                    
+                        ros::spinOnce();
+                    }
+
+                    ros::Duration(0.1).sleep();
+
+                    return true;
+                }
+
+            }
+
+            // imshow("dbg", dbg);
+            // waitKey(1);
+
+            return false;
+
+        }
+
+        catch (...)
+        {
+            cerr << " error between " << globalFrame_ << " to " << baseFrame_ << endl;
+            return false;
+        }
+
+        // try
+        // {
+        //     auto point1 = currentRobotFootPrintLocationOodm_.polygon.points[0];
+        //     auto point2 = currentRobotFootPrintLocationOodm_.polygon.points[1];
+        //     auto point3 = currentRobotFootPrintLocationOodm_.polygon.points[2];
+
+
+        //     // convert odom pose to odom pix
+        //     cv::Point2d pix1 = cv::Point2d( (point1.x - globalMapOriginPositionX_) / globalMapResolution_,
+        //         (point1.y - globalMapOriginPositionY_) / globalMapResolution_ );
+
+        //     cv::Point2d pix2 = cv::Point2d( (point2.x - globalMapOriginPositionX_) / globalMapResolution_,
+        //         (point2.y - globalMapOriginPositionY_) / globalMapResolution_ );
+
+        //     cv::Point2d pix3 = cv::Point2d( (point3.x - globalMapOriginPositionX_) / globalMapResolution_,
+        //         (point3.y - globalMapOriginPositionY_) / globalMapResolution_ );
+            
+        //     cerr<<" pix1 "<<pix1<<endl;
+        //     cerr<<" pix2 "<<pix2<<endl;
+        //     cerr<<" pix3 "<<pix3<<endl;
+
+        //     cerr<<"------------------------------ "<<endl;
+
+
+        //     cv::RotatedRect robotRotateRect;
+            
+        //     try
+        //     {
+        //         robotRotateRect = cv::RotatedRect(pix1, pix2 , pix3); 
+        //     }
+        //     catch( cv::Exception& e )
+        //     {
+        //         const char* err_msg = e.what();
+        //         std::cout << "11111111 exception caught: " << err_msg << std::endl;
+
+        //         return false;
+        //     }
+
+        //     // We take the edges that OpenCV calculated for us
+        //     // cv::Point2f vertices2f[4];
+        //     // robotRotateRect.points(vertices2f);
+
+        //     // Convert them so we can use them in a fillConvexPoly
+        //     // cv::Point vertices[4];    
+        //     // for(int i = 0; i < 4; ++i){
+        //     //     vertices[i] = vertices2f[i];
+        //     // }
+
+        //     // Mat dbg = costMapImg_.clone();
+        //     // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+
+
+        //     // for (int i = 0; i < 4; i++)
+        //     //     line(dbg, vertices[i], vertices[(i+1)%4], Scalar(0,255,0), 1);
+
+        //     // float angle = robotRotateRect.angle * M_PI / 180.0;
+        //     // // angle += M_PI; // you may want rotate it upsidedown
+        //     // float sinA = sin(angle), cosA = cos(angle);
+        //     // float data[6] = {
+        //     //     cosA, sinA, robotRotateRect.size.width/2.0f - cosA * robotRotateRect.center.x - sinA * robotRotateRect.center.y,
+        //     //     -sinA, cosA, robotRotateRect.size.height/2.0f - cosA * robotRotateRect.center.y + sinA * robotRotateRect.center.x};
+        //     // Mat rot_mat(2, 3, CV_32FC1, data);
+        //     // Mat result;
+
+        //     Mat roiImg =  costMapImg_(robotRotateRect.boundingRect()).clone();
+
+        //     // warpAffine(roiImg, result, rot_mat, robotRotateRect.size, INTER_CUBIC);
+
+        //     bool needToDoRevers = false;
+        //     for (int j = 0; j < roiImg.rows; j++)
+        //     {
+        //         for (int i = 0; i < roiImg.cols; i++)
+        //         {
+
+        //             auto value = roiImg.at<uchar>(j , i);
+
+        //             if( value == 255){
+
+        //                 needToDoRevers = true;
+        //                 break;
+        //             }
+                    
+        //         }
+
+        //         if( needToDoRevers){
+        //             break;
+        //         }
+        //     }
+
+        //     if ( needToDoRevers ){
+
+        //         ros::Rate rate(1);
+        //         float maxReversDuration = 2.0;
+
+        //         geometry_msgs::Twist velocity;
+        //         velocity.linear.x = -0.2;
+
+        //         auto startTime = ros::WallTime::now();
+
+        //         while (ros::ok()) {
+
+        //             cerr<<" REEEEEEVERSE !!!!!!!!!! "<<endl;
+        //             reverse_cmd_vel_pub_.publish(velocity);
+        //             rate.sleep();
+
+        //             auto end = ros::WallTime::now();
+
+        //             auto duration = (end - startTime).toSec();
+        //             if( duration > maxReversDuration){
+        //                 break;
+        //             }
+                
+        //             ros::spinOnce();
+        //         }
+
+        //         ros::Duration(0.1).sleep();
+
+        //         return true;
+
+
+        //     }       
+
+        //     // imwrite("/home/yakir/distance_transform_coverage_ws/bags/roiImg.png", roiImg);
+
+        //     return false;
+        // }
+        // catch( cv::Exception& e )
+        // {
+        //     const char* err_msg = e.what();
+        //     std::cout << "exception caught: " << err_msg << std::endl;
+        //     return false;
+
+
+        // }       
+           
+        
+    }
+
     void setCoverageState(bool coverageState){
 
         coverageStateStarts_ = coverageState;
@@ -308,6 +992,24 @@ public:
 
 
     } 
+
+
+private:
+
+    void footprintCallback(const geometry_msgs::PolygonStamped::ConstPtr &msg) {
+
+        gotFootPrint_ = true;
+        currentRobotFootPrintLocationOodm_.polygon = msg->polygon;
+        currentRobotFootPrintLocationOodm_.header = msg->header;
+
+    
+			
+
+    }
+
+    
+
+    
 
 
     void publishRobotHistoryPath() {
@@ -371,9 +1073,13 @@ public:
         }
         catch (tf::TransformException ex)
         {
-            ROS_ERROR("%s", ex.what());            
+            ROS_ERROR("%s", ex.what());  
+
+            return pointStampedOut;          
         }
     }
+
+    
 
 
     Mat occupancyGridMatToGrayScale(const Mat &map)
@@ -405,35 +1111,14 @@ public:
         return output;
     }
 
-    void publishCoverageImgMap() {
-
-
-        Mat map = getCurrentMap();
-
-        if (map.data) {
-
-            cvtColor(map, map, COLOR_GRAY2BGR);
-
-            // draw the path
-            for( int i = 0; i < path_.size(); i++){
-
-                if( i > 0 ){
-                    cv::line(map, path_[i], path_[i - 1], Scalar(34, 139, 139), 2);
-                }             
-            }
-
-            
-            auto msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", map).toImageMsg();
-            coverage_map_pub_.publish(msg);
-        }
-
-           
-    }  
+    
 
     
     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
 
-
+        globalMapOriginPositionX_ = msg->info.origin.position.x;
+        globalMapOriginPositionY_ = msg->info.origin.position.y; 
+        globalMapResolution_ = msg->info.resolution;
 
         auto endLocalCostMap = high_resolution_clock::now();
         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
@@ -441,15 +1126,15 @@ public:
         /// do this every 2 seconds
         if( init_ && durationFromLastCalc > 2.0 && coverageStateStarts_) {
 
-            cv::Mat costMapImg = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
-            memcpy(costMapImg.data, msg->data.data(), msg->info.height * msg->info.width);
+            costMapImg_ = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+            memcpy(costMapImg_.data, msg->data.data(), msg->info.height * msg->info.width);
             
-            costMapImg.setTo(255, costMapImg != 0);
+            costMapImg_.setTo(255, costMapImg_ != 0);
 
             string global_costmap_frame = msg->header.frame_id;
 
-            Mat dbg = costMapImg.clone();
-            cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+            // Mat dbg = costMapImg.clone();
+            // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
             for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ){
 
@@ -467,14 +1152,16 @@ public:
 
                 auto poseInOdomFrame = transformFrames(p, global_costmap_frame , globalFrame_ ,msg->header.stamp);
 
+              
+
                 // convert odom pose to odom pix
-                float xPix = (poseInOdomFrame.point.x - msg->info.origin.position.x) / msg->info.resolution;
-                float yPix = (poseInOdomFrame.point.y - msg->info.origin.position.y) / msg->info.resolution;
+                float xPix = (poseInOdomFrame.point.x - globalMapOriginPositionX_) / globalMapResolution_;
+                float yPix = (poseInOdomFrame.point.y - globalMapOriginPositionY_) / globalMapResolution_;
 
                 cv::Point pOnImg = cv::Point(xPix, yPix);
                 
                 // get the cost value
-                int costVal = costMapImg.at<uchar>(pOnImg.y, pOnImg.x);
+                int costVal = costMapImg_.at<uchar>(pOnImg.y, pOnImg.x);
 
                 float distRobotFromGoal = 
                      goalCalculator.distanceCalculate( cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
@@ -651,6 +1338,8 @@ public:
             return false;
         }
     }
+
+    
 
     void publishEdgesFrontiers(const std::vector<Frontier>& currentEdgesFrontiers)
     {
@@ -1132,375 +1821,7 @@ public:
     }
 
 
-    bool exlpore()
-    {
-        string m = "";
-
-        vector<cv::Point2d> unreachedPointFromFronitiers;
-
-        while (ros::ok())
-        {
-            ros::spinOnce();
-
-
-            if (exit_){
-
-                return false;
-            }
-
-
-            if (!init_)
-            {
-                cerr << "map not recieved !!" << endl;
-
-                continue;;
-            }
-
-            if ( !updateRobotLocation())
-            {
-                cerr << "can't update robot location !!" << endl;
-
-                continue;
-            }           
-
-            currentAlgoMap_ = getCurrentMap();
-
-            Mat explorationImgMap = currentAlgoMap_.clone();
-            // set the unreached goals on the exploration map
-            
-            for(int i = 0; i < unreachedPointFromFronitiers.size(); i++ ){
-                
-                int radiusPix = (1.0 / mapResolution_) * (walls_inflation_m_ );    
-                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));        
-            }
-
-            switch (explore_state_){
-
-                case NAV_TO_SAFEST_GOAL:
-                {   
-
-                    node_.setParam("/coverage/state", "RUNNING");
-
-
-                    cerr<<" NAV_TO_SAFEST_GOAL "<<endl;
-                    globalStart_ = convertPoseToPix(robotPose_);
-
-                    startingLocation_ = robotPose_;
-
-                    startingTime_ = getCurrentTime();
-
-                    cv::Point safestGoal;
-                    if (!goalCalculator.findSafestLocation(explorationImgMap, globalStart_, safestGoal))
-                    {
-
-                        explore_state_ = ERROR_EXPLORE;
-                        break;
-                    }
-
-                    safestGoal = fixLocationOnGrid(safestGoal, globalStart_);
-
-                    float distSafestFromRoboctPoseM = 
-                            (mapResolution_) * goalCalculator.distanceCalculate( safestGoal, globalStart_);    
-
-                    cerr<<" distSafestFromRoboctPoseM "<<distSafestFromRoboctPoseM<<endl;
-                    // it the robot close to the safest (under 2 meters), skip the driving
-                    if( distSafestFromRoboctPoseM < 2.0) {
-
-                        cerr<<" the robot too cloose to safest point, skip .. distnace :"<<distSafestFromRoboctPoseM<<endl;
-                        explore_state_ = NAV_TO_NEXT_FRONTIER;
-                        break;
-                    }
-
-                    cerr<<"exploration: safestGoal "<<safestGoal<<endl;
-                    
-                    auto safestGoalPose = convertPixToPose(safestGoal, robotPose_.pose.orientation);
-                    bool result = sendGoal(safestGoalPose);                      
-                    
-
-                    cerr<<"exploration: mov_base_result "<<result<<endl;                            
-
-                    explore_state_ = NAV_TO_NEXT_FRONTIER;
-
-                    break;
-                }
-                case NAV_TO_NEXT_FRONTIER:
-                {   
-
-                    cerr<<"NAV_TO_NEXT_FRONTIER "<<endl;
-
-                    float mapScore = 0.0;
-
-                    auto robotPix = convertPoseToPix(robotPose_);
-
-                    std::vector<Frontier> currentEdgesFrontiers;
-                    mapScore = goalCalculator.calcEdgesFrontiers(explorationImgMap,
-                                          currentEdgesFrontiers, robotPix, mapResolution_);
-
-                    cerr<<"map exploration score: "<<mapScore<<endl;
-                    
-
-                    if( currentEdgesFrontiers.size() == 0){
-
-                        explore_state_ = FINISH_EXPLORE;
-                        break;
-                    }
-
-
-                    geometry_msgs::Quaternion q;
-                    q.w = 1;
-                    auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);                               
-
-                    
-                    publishEdgesFrontiers(currentEdgesFrontiers);
-
-                    bool result = sendGoal(nextFrontierGoal);
-
-                    if( !result) {
-
-                        unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
-                    }
-
-
-
-                    cerr<<"move_base result for NAV_TO_NEXT_FRONTIER "<<result<<endl;
-
-                    
-                    explore_state_ = NAV_TO_NEXT_FRONTIER;
-
-                    break;
-                }
-                case ERROR_EXPLORE:
-                {
-                    node_.setParam("/coverage/state", "STOPPED");
-
-                    cerr<<"ERROR_EXPLORE "<<endl;
-                    break;
-                }
-                case FINISH_EXPLORE:
-                {                  
-     
-                    
-                    return true;
-                }
-
-            }
-
-        }
-        
-        return false;
-    }
-
-    void coverage()
-    {   
-
-        int countNumberOfTriesFinsihGoal = 0;
-        
-        while (ros::ok())
-        {
-            ros::spinOnce();
-
-            
-            if (!init_)
-            {
-
-                continue;;
-            }
-
-            if (!updateRobotLocation())
-            {
-
-                continue;
-            }  
-
-            
-
-            switch (coverage_state_)
-            {   
-                
-                case COVERAGE:
-                {
-                    cerr << " COVERAGE " << endl;
-
-                    currentAlgoMap_ = getCurrentMap();
-
-                    // calculate goal-distance-transform-map
-                    cv::Mat distanceTransformImg;
-
-                    auto currentPosition = convertPoseToPix(startingLocation_);
-
-                    cerr<<" currentPosition "<<currentPosition<<endl;
-
-
-                    cv::Point2d goal = currentPosition;
-
-
-                    // // calc the distance-transform-img from current goal
-                    if( !distanceTransformGoalCalculator.calcDistanceTransfromImg(currentAlgoMap_,
-                        currentPosition, distanceTransformImg, 1)){
-
-                        cerr<<" failed to calcutate the disntace transform img"<<endl;   
-                        coverage_state_ = ERROR_COVERAGE;
-                        break;
- 
-                    }
-
-                    Mat grayDistImg;
-                    distanceTransformGoalCalculator.normalizeDistanceTransform(distanceTransformImg, grayDistImg);
-
-
-                    // Mat dbg = mapping_map_.clone();
-                    // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
-
-                    // calc the path-coverage of the current blob
-                    
-                    cerr<<" cccccccccccccccccc currentPosition for patthern "<<currentPosition<<endl;
-                    path_ =
-                        disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition,
-                                                            goal, distanceTransformImg, getDistanceBetweenGoalsPix());
-
-
-                    // convert the path into poses
-                    path_poses_with_status_.coveragePathPoses_ = covertPointsPathToPoseRout(path_);
-                    path_poses_with_status_.initStatusList();
-
-                    // exectute currnet navigation the blob-coverage
-                    cerr <<"cccccccccccc num of coverage waypoints " << 
-                        path_poses_with_status_.coveragePathPoses_.size() <<" path_ size is "<<path_.size()<<endl;
-                    
-                    for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
-                    {   
-
-                        ros::spinOnce();
-
-                        updateRobotLocation();
-
-
-                        percentCoverage_ = ( float(i) / float(path_poses_with_status_.coveragePathPoses_.size()))  * 100.0;
-                        node_.setParam("/coverage/percentage", percentCoverage_);    
-                        
-                        publishCoveragePath(path_poses_with_status_.coveragePathPoses_);
-
-
-                        publishRobotHistoryPath();
-
-                        // the waypoint is checked (black)
-                        if( path_poses_with_status_.status_[i] != UN_COVERED ){
-                            continue;
-                        }
-
-                        // set the orientation of the goal dynamically
-                        
-                        if (false) {
-
-                            float angleRobot2Goal = 
-                                -1.0 * atan2 (robotPose_.pose.position.y - path_poses_with_status_.coveragePathPoses_[i].pose.position.y, 
-                                    robotPose_.pose.position.x - path_poses_with_status_.coveragePathPoses_[i].pose.position.x);
-                           
-                            path_poses_with_status_.coveragePathPoses_[i].pose.orientation = 
-                                tf::createQuaternionMsgFromYaw(angleRobot2Goal);
-
-                        }
-                        
-
-                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
-
-                        // set way[oint as checked
-                        path_poses_with_status_.setStatByIndex(i, COVERED );
-
-
-                        if( exit_){
-
-                            return;
-                        }
-
-                        if (result)
-                        {
-                            cerr << i << ": Waypoint reached!" << endl;
-                        }
-                        else
-                        {
-                            cerr << i << ": Failed to reach waypoint" << endl;
-
-                        }
-                    }
-
-                    coverage_state_ = BACK_TO_STARTING_LOCATION;
-                    break;
-                }
-                case BACK_TO_STARTING_LOCATION:
-                {   
-                    cerr<<" BACK_TO_STARTING_LOCATION "<<endl; 
-
-                    if( countNumberOfTriesFinsihGoal > 3) {
-
-                        coverage_state_ = COVERAGE_DONE;  
-
-                        break; 
-                    }  
-            
-                    cerr<<"startingLocation_ : "<<startingLocation_.pose.position.x<<", "<<startingLocation_.pose.position.y<<endl;
-                    cerr<<"startingLocation_  frame: "<<startingLocation_.header.frame_id<<endl;
-
-
-                    bool result = sendGoal(startingLocation_);
-
-                    if (result)
-                    {
-                        cerr <<"BACK_TO_STARTING_LOCATION reached!" << endl;
-
-                        coverage_state_ = COVERAGE_DONE;  
-
-                        break;
-
-                    }
-                    else
-                    {
-                        cerr <<" Failed to reach BACK_TO_STARTING_LOCATION, try again" << endl;
-
-                        coverage_state_ = BACK_TO_STARTING_LOCATION; 
-                        
-                        countNumberOfTriesFinsihGoal++;
-
-
-                        break;
-                    }
-
-                    
-                }
-                case COVERAGE_DONE:
-                {
-                    cerr<<" COVERAGE_DONE "<<endl;  
-
-                    node_.setParam("/coverage/state", "STOPPED");
-                    
-                    saveCoverageImg();
-
-                    coverage_state_ = COVERAGE_DONE;
-                    break;
-                }
-                
-                case ERROR_COVERAGE:
-                {   
-
-                    if(!errCoverage_)
-                    {
-                        cerr<<" ERROR_COVERAGE "<<endl; 
-                        errCoverage_ = true; 
-
-                    }
-                    
-                    node_.setParam("/coverage/state", "STOPPED");
-
-                    coverage_state_ = ERROR_COVERAGE;
-                    break;
-                }
-            }
-
-
-        }
-
-       
-    }   
+    
 
     void removeGoalsByRobotRout() {
 
@@ -1508,8 +1829,7 @@ public:
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
 
             /// if the goal already covered 
-            if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH || 
-                path_poses_with_status_.status_[i] == COVERED) {
+            if( path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ) {
                 continue;
             }
 
@@ -1644,53 +1964,6 @@ public:
     }
 
 
-    // void makeReverseIfNeeded() {
-
-    //     /// TO-DO
-    //    // if the robot inside obstacle
-    //     cv::Rect r(robotPix.x - (robot_w_m_ ), robotPix.y - (robot_w_m_), 
-    //         robot_w_m_ * 2 , robot_w_m_ * 2);
-
-    //     for( int x = r.x; x < r.x + r.width; x++){
-    //         for( int y = r.y; y < r.y + r.height; y++){
-                
-    //             cv::Point2d pInBox(x, y);
-
-    //             if ((int)currentAlgoMap_.at<uchar>(pInBox.y, pInBox.x) == 0)
-    //             {
-    //                 needToExecuteRevers = true;
-    //             }
-    //         }
-    //     }
-
-    // }
-
-
-
-    // void addGoalNearbyCameraScan() {
-
-    //     for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++) {
-
-    //         auto goalFromPath = path_poses_with_status_.coveragePathPoses_[i];
-
-    //         for( int j = 0; j < currentCameraScanMapPointsM_.size(); j++ ) { 
-
-    //             auto pCameraScanOnMap = currentCameraScanMapPointsM_[j];
-
-    //             float distM = 
-    //                 goalCalculator.distanceCalculate( cv::Point2d(goalFromPath.pose.position.x, goalFromPath.pose.position.y),
-    //                     pCameraScanOnMap);
-
-    //             if( distM < (walls_inflation_m_ ) ) {
-
-    //                 path_poses_with_status_.setStatByIndex(i, true);
-    //             }
-
-    //         }
-
-    //     }
-        
-    // }
     
     void saveCoverageImg(){
 
@@ -1704,10 +1977,11 @@ public:
 
 
             // draw the pattern
-            for( int i = 0; i < path_.size(); i++){
+            for( int i = 0; i < path_poses_with_status_.path_.size(); i++){
 
                 if( i > 0 ){
-                    cv::line(patternImg, path_[i], path_[i - 1], Scalar(34, 139, 139), 1);
+                    cv::line(patternImg, path_poses_with_status_.path_[i], 
+                        path_poses_with_status_.path_[i - 1], Scalar(34, 139, 139), 1);
                 }             
             }
 
@@ -1731,6 +2005,40 @@ public:
      
             }
 
+            // draw the grid
+            for(int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++ ) {  
+                switch (path_poses_with_status_.status_[i])
+                {
+                    case UN_COVERED:
+                    {
+                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,255,0), -1, 8, 0);
+                        break;
+
+                    }
+                    case COVERED:
+                    {
+                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,0,0), -1, 8, 0);
+                        break;
+
+                    }
+                    case COVERED_BY_ROBOT_PATH:
+                    {
+                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(250,206,135), -1, 8, 0);
+                        break; 
+
+                    }  
+                     case COVERED_BY_OBSTACLE:
+                    {
+                        circle(robotTreaceImg, path_poses_with_status_.path_[i], 2, Scalar(0,0,255), -1, 8, 0);
+                        break; 
+
+                    }  
+                   
+                }
+               
+
+            }
+
 
             /*
                 Hi yakir,  can you change the file format  to these:
@@ -1744,7 +2052,7 @@ public:
 
             int durationMinutes = durationCoverage.count() / 60;
            
-
+            percentCoverage_ = getCurrentPercentCoverage();
             string image_name_format = startingTime_ + '_' +to_string(durationMinutes)+ '_' + to_string(int(percentCoverage_));
             string full_img_name = coverage_img_path_ + image_name_format+".png";
             node_.setParam("/coverage/image_name", image_name_format);
@@ -1763,7 +2071,7 @@ private:
     COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE;
     bool coverageStateStarts_ = false;
 
-    EXPLORE_STATE explore_state_ = EXPLORE_STATE::NAV_TO_SAFEST_GOAL;
+    EXPLORE_STATE explore_state_ = EXPLORE_STATE::NAV_TO_NEXT_FRONTIER;
 
     // move-base
     MoveBaseController moveBaseController_;
@@ -1775,7 +2083,11 @@ private:
 
     ros::Subscriber camera_scan_sub_;
 
+    ros::Subscriber robot_footprint_sub_;
+
     // pubs
+
+    ros::Publisher reverse_cmd_vel_pub_;
 
     ros::Publisher cuurentCoveragePathPub_;
 
@@ -1810,7 +2122,6 @@ private:
 
 
     Path_with_Status path_poses_with_status_;
-    vector<cv::Point> path_; // for display on image
 
      
 
@@ -1842,6 +2153,13 @@ private:
 
     float mapResolution_ = 0.05;
 
+    // global cost map params
+    float  globalMapOriginPositionX_ = -1;
+    float  globalMapOriginPositionY_ = -1;
+    float  globalMapResolution_ = -1;
+    cv::Mat costMapImg_;
+
+
     bool init_ = false;
 
     float width_;
@@ -1855,6 +2173,9 @@ private:
     string globalFrame_ = "map";
 
     string baseFrame_ = "base_footprint";
+
+    string odomFrame_ = "odom";
+
 
     bool reducing_goals_ = true;
 
@@ -1879,6 +2200,13 @@ private:
     
 
     bool imgSaved_ = false;
+
+
+    // robot footprint
+    bool gotFootPrint_ = false;
+    geometry_msgs::PolygonStamped currentRobotFootPrintLocationOodm_;
+
+
     
 
     bool errCoverage_ = false;
@@ -1909,6 +2237,23 @@ int main(int argc, char **argv)
         mapCoverageManager.coverage();
 
     }
+
+    // while (ros::ok()) {
+
+    // mapCoverageManager.setCoverageState(true);
+
+
+    //     ros::spinOnce();
+
+    //     mapCoverageManager.makeReverseIfNeeded();
+
+    // }
+
+
+
+    
+
+    ros::spin();
 
 
     return 0;
@@ -2030,6 +2375,329 @@ int main(int argc, char **argv)
 
     
                     
+
+//     return 0;
+// }
+
+
+
+
+// class Test
+// {
+
+// public:
+//     Test()
+//     {      
+     
+
+//           // subs
+//         global_cost_map_sub_ =
+//             node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
+//                      &Test::globalCostMapCallback, this);    
+        
+        
+//         robot_footprint_sub_ =
+//             node_.subscribe<geometry_msgs::PolygonStamped>("/move_base/local_costmap/footprint", 1,
+//                                                      &Test::footprintCallback, this); 
+
+
+//         reverse_cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>(		
+//         	"/cmd_vel", 1, false);	      
+
+//         startLocalCostMap_ = high_resolution_clock::now();
+//     }                                            
+
+
+//     ~Test(){}
+
+//     bool makeReverseIfNeeded() {
+
+//         ros::spinOnce();
+
+
+//         if( !updateRobotLocation()){
+//             return false;
+//         }
+
+//         if( !costMapImg_.data){
+//             return false;
+//         }
+
+//         if( ! gotFootPrint_){
+//             return false;
+//         }
+//         cerr<<"1111111111111111111111111111111111111111111 "<<endl;
+
+
+
+
+//         auto point1 = currentRobotFootPrintLocationOodm_.polygon.points[0];
+//         auto point2 = currentRobotFootPrintLocationOodm_.polygon.points[1];
+//         auto point3 = currentRobotFootPrintLocationOodm_.polygon.points[2];
+
+
+//             // convert odom pose to odom pix
+//         cv::Point2d pix1 = cv::Point2d( (point1.x - globalMapOriginPositionX_) / globalMapResolution_,
+//             (point1.y - globalMapOriginPositionY_) / globalMapResolution_ );
+
+//         cv::Point2d pix2 = cv::Point2d( (point2.x - globalMapOriginPositionX_) / globalMapResolution_,
+//             (point2.y - globalMapOriginPositionY_) / globalMapResolution_ );
+
+//         cv::Point2d pix3 = cv::Point2d( (point3.x - globalMapOriginPositionX_) / globalMapResolution_,
+//             (point3.y - globalMapOriginPositionY_) / globalMapResolution_ );
+        
+//         cv::RotatedRect robotRotateRect = cv::RotatedRect(pix1, pix2 , pix3); 
+
+//         // We take the edges that OpenCV calculated for us
+//         // cv::Point2f vertices2f[4];
+//         // robotRotateRect.points(vertices2f);
+
+//         // Convert them so we can use them in a fillConvexPoly
+//         // cv::Point vertices[4];    
+//         // for(int i = 0; i < 4; ++i){
+//         //     vertices[i] = vertices2f[i];
+//         // }
+
+//         // Mat dbg = costMapImg_.clone();
+//         // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+
+
+//         // for (int i = 0; i < 4; i++)
+//         //     line(dbg, vertices[i], vertices[(i+1)%4], Scalar(0,255,0), 1);
+
+//         // float angle = robotRotateRect.angle * M_PI / 180.0;
+//         // // angle += M_PI; // you may want rotate it upsidedown
+//         // float sinA = sin(angle), cosA = cos(angle);
+//         // float data[6] = {
+//         //     cosA, sinA, robotRotateRect.size.width/2.0f - cosA * robotRotateRect.center.x - sinA * robotRotateRect.center.y,
+//         //     -sinA, cosA, robotRotateRect.size.height/2.0f - cosA * robotRotateRect.center.y + sinA * robotRotateRect.center.x};
+//         // Mat rot_mat(2, 3, CV_32FC1, data);
+//         // Mat result;
+
+//         Mat roiImg =  costMapImg_(robotRotateRect.boundingRect()).clone();
+
+//         // warpAffine(roiImg, result, rot_mat, robotRotateRect.size, INTER_CUBIC);
+
+//         bool needToDoRevers = false;
+//         for (int j = 0; j < roiImg.rows; j++)
+//         {
+//             for (int i = 0; i < roiImg.cols; i++)
+//             {
+
+//                 auto value = roiImg.at<uchar>(j , i);
+
+//                 if( value == 255){
+
+//                     needToDoRevers = true;
+//                     break;
+//                 }
+                
+//             }
+
+//             if( needToDoRevers){
+//                 break;
+//             }
+//         }
+
+//         if ( needToDoRevers ){
+
+//             ros::Rate rate(1);
+//             float maxReversDuration = 3.0;
+
+//             geometry_msgs::Twist velocity;
+//             velocity.linear.x = -0.3;
+
+//             auto startTime = ros::WallTime::now();
+
+//             while (ros::ok()) {
+
+//                 reverse_cmd_vel_pub_.publish(velocity);
+//                 rate.sleep();
+
+//                 auto end = ros::WallTime::now();
+
+//                 auto duration = (end - startTime).toSec();
+//                 if( duration > maxReversDuration){
+//                     break;
+//                 }
+              
+//                 ros::spinOnce();
+//             }
+
+//             return true;
+
+
+//         }       
+
+//         // imwrite("/home/yakir/distance_transform_coverage_ws/bags/roiImg.png", roiImg);
+
+//         return false;
+           
+        
+//     }
+
+// private:
+
+//     void footprintCallback(const geometry_msgs::PolygonStamped::ConstPtr &msg) {
+
+//         gotFootPrint_ = true;
+//         currentRobotFootPrintLocationOodm_.polygon = msg->polygon;
+//         currentRobotFootPrintLocationOodm_.header = msg->header;
+
+    
+			
+
+//     }
+
+//     void globalCostMapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
+
+
+//         globalMapOriginPositionX_ = msg->info.origin.position.x;
+//         globalMapOriginPositionY_ = msg->info.origin.position.y; 
+//         globalMapResolution_ = msg->info.resolution;
+
+//         auto endLocalCostMap = high_resolution_clock::now();
+//         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
+
+//         /// do this every 2 seconds
+//         if( durationFromLastCalc > 2.0) {
+
+            
+//             costMapImg_ = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
+//             memcpy(costMapImg_.data, msg->data.data(), msg->info.height * msg->info.width);
+            
+//             costMapImg_.setTo(255, costMapImg_ != 0);
+
+
+//             startLocalCostMap_ = endLocalCostMap;
+//         }
+
+
+
+//     }
+
+
+     
+
+//     bool updateRobotLocation()
+//     {
+
+//         tf::StampedTransform transform;
+
+//         try
+//         {
+//             // get current robot pose
+//             tfListener_.lookupTransform(globalFrame_, baseFrame_,
+//                                         ros::Time(0), transform);
+
+//             robotPose_.header.frame_id = globalFrame_;
+//             robotPose_.header.stamp = ros::Time::now();
+//             robotPose_.pose.position.x = transform.getOrigin().x();
+//             robotPose_.pose.position.y = transform.getOrigin().y();
+//             robotPose_.pose.position.z = 0;
+//             robotPose_.pose.orientation.x = transform.getRotation().x();
+//             robotPose_.pose.orientation.y = transform.getRotation().y();
+//             robotPose_.pose.orientation.z = transform.getRotation().z();
+//             robotPose_.pose.orientation.w = transform.getRotation().w();
+
+
+
+//             return true;
+//         }
+
+//         catch (...)
+//         {
+//             cerr << " error between " << globalFrame_ << " to " << baseFrame_ << endl;
+//             return false;
+//         }
+//     }
+
+
+//      geometry_msgs::PointStamped transformFrames(
+//         Point3d objectPoint3d, string target_frame, string source_Frame, ros::Time t)
+//     {
+
+//         geometry_msgs::PointStamped pointStampedIn;
+//         geometry_msgs::PointStamped pointStampedOut;
+
+//         pointStampedIn.header.frame_id = source_Frame;
+//         pointStampedIn.header.stamp = t;
+//         pointStampedIn.point.x = objectPoint3d.x;
+//         pointStampedIn.point.y = objectPoint3d.y;
+//         pointStampedIn.point.z = objectPoint3d.z;
+
+//         try
+//         {
+//             tf::StampedTransform transform_;   
+
+//             tfListener_.lookupTransform(target_frame, source_Frame,
+//                                         ros::Time(0), transform_);
+
+//             tfListener_.transformPoint(target_frame, pointStampedIn, pointStampedOut );
+
+
+//             return pointStampedOut;
+//         }
+//         catch (tf::TransformException ex)
+//         {
+//             ROS_ERROR("%s", ex.what());            
+//         }
+//     }
+
+
+    
+
+
+
+
+// private:
+
+
+//     ros::Publisher reverse_cmd_vel_pub_;
+
+//     string globalFrame_ = "map";
+
+//     string baseFrame_ = "base_footprint";
+
+//     high_resolution_clock::time_point startLocalCostMap_;
+
+//     tf::TransformListener tfListener_;
+
+//     geometry_msgs::PoseStamped robotPose_;
+
+//     ros::Subscriber global_cost_map_sub_;
+
+//     ros::Subscriber robot_footprint_sub_;
+
+//     ros::NodeHandle node_;
+
+
+//     geometry_msgs::PolygonStamped currentRobotFootPrintLocationOodm_;
+
+
+//      // global cost map params
+//     float  globalMapOriginPositionX_ = -1;
+//     float  globalMapOriginPositionY_ = -1;
+//     float  globalMapResolution_ = -1;
+//     cv::Mat costMapImg_;
+//     bool gotFootPrint_ = false;
+
+
+
+
+
+// };
+
+// int main(int argc, char **argv)
+// {
+//     ros::init(argc, argv, "map_coverage_exploration_node" , ros::init_options::NoSigintHandler);
+
+//     Test test;
+//     test.makeReverseIfNeeded();
+
+
+   
+
 
 //     return 0;
 // }

@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   std_msgs
   roslib
+  geometry_msgs
 )
 
 

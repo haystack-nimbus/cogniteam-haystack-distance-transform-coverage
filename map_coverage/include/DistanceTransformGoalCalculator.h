@@ -81,7 +81,7 @@ public:
 
             // the robot location is on obstacles but we have to contour of the map,
             // the goal will be the current safe location
-            if( contours.size() == 1 ){
+            if( contours.size() == 1 ) {
 
                 Mat dist;
                 distanceTransform(imgMap, dist, DIST_L2, 3);
