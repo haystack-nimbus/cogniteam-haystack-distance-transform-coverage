@@ -380,6 +380,8 @@ public:
 
                     float mapScore = 0.0;
 
+                    updateRobotLocation();
+
                     auto robotPix = convertPoseToPix(robotPose_);
 
                     std::vector<Frontier> currentEdgesFrontiers;
