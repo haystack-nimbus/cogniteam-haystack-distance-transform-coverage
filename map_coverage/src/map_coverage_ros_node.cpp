@@ -397,6 +397,8 @@ public:
                     
                     makeReverseIfNeeded();
 
+                    cerr<<" sending goal to the next froniter pix "<<currentEdgesFrontiers[0].center<<endl;
+
                     bool result = sendGoal(nextFrontierGoal);
 
                     if( !result) {
@@ -421,7 +423,7 @@ public:
                 }
                 case FINISH_EXPLORE:
                 {                  
-     
+                    cerr<<"FINISH_EXPLORE "<<endl;
                     
                     return true;
                 }
