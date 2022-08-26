@@ -216,10 +216,10 @@ public:
     MapCoverageManager()
     {
 
-        // cerr<<" wait for move-base server "<<endl;
-        // moveBaseController_.waitForServer(ros::Duration(10.0));
-        // ros::Duration(1).sleep();
-        // cerr << " exploration is now connecting with move-base !! " << endl;
+        cerr<<" wait for move-base server "<<endl;
+        moveBaseController_.waitForServer(ros::Duration(100.0));
+        ros::Duration(1).sleep();
+        cerr << " exploration is now connecting with move-base !! " << endl;
 
         // rosparam
         ros::NodeHandle nodePrivate("~");
