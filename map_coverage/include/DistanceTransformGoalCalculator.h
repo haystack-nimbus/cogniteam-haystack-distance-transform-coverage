@@ -157,7 +157,6 @@ public:
                     goal = cv::Point2d(tmp.x, tmp.y);
                     circle(imgMap,goal, 5, Scalar(150), -1, 8, 0);      
 
-                    imwrite("/home/algo-kobuki/imgs/bad.png",imgMap);    
                     cerr<<" found goal after find find the closest white pix "<<goal<<endl;
                 }
             }

@@ -305,7 +305,7 @@ public:
     ~MapCoverageManager() {
 
 
-        moveBaseController_.cancelNavigation();
+        // moveBaseController_.cancelNavigation();
         ros::Duration(1).sleep();
 
         cerr<<"MapCoverageManager distructor "<<endl;
@@ -368,6 +368,9 @@ public:
 
                     startingTime_ = getCurrentTime();
 
+                    startingLocation_ = robotPose_;
+
+
                     explore_state_ = NAV_TO_NEXT_FRONTIER;
                     break;
                 }
@@ -407,7 +410,7 @@ public:
 
                     cerr<<" sending goal to the next froniter pix "<<currentEdgesFrontiers[0].center<<endl;
 
-                    bool result = sendGoal(nextFrontierGoal);
+                    bool result = sendGoal(nextFrontierGoal, -1 , true);
 
                     if( !result) {
 
@@ -481,7 +484,6 @@ public:
 
                     updateRobotLocation();
 
-                    startingLocation_ = robotPose_;
                     
                     cv::Point2d currentPosition = convertPoseToPix(startingLocation_);
 
@@ -548,14 +550,13 @@ public:
                         }
 
                         // set the orientation of the goal dynamically
-                        
+
                         makeReverseIfNeeded();
                         
                         ros::spinOnce();
 
-                        // rotateToGoal(path_poses_with_status_.coveragePathPoses_[i]);                        
 
-                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i]);
+                        bool result = sendGoal(path_poses_with_status_.coveragePathPoses_[i], i);
 
                         // set way[oint as checked
                         path_poses_with_status_.setStatByIndex(i, COVERED );
@@ -563,6 +564,7 @@ public:
 
                         if( exit_){
 
+                            saveCoverageImg();
                             return;
                         }
 
@@ -655,6 +657,47 @@ public:
 
        
     }   
+
+    void setOrientationByNextUnCoveredGoal(int index, geometry_msgs::PoseStamped& originalGoal ){
+
+
+        if( index == path_poses_with_status_.coveragePathPoses_.size() - 1){
+
+            return;
+        }
+
+
+        for (int i = index + 1; i < path_poses_with_status_.coveragePathPoses_.size(); i++){
+
+
+            if( path_poses_with_status_.status_[i] == UN_COVERED ){
+                
+                // this is the next un-covered goals, calculate direction from this goal
+                auto nextGoal = path_poses_with_status_.coveragePathPoses_[i];
+
+                float angle = atan2(originalGoal.pose.position.y - nextGoal.pose.position.y,
+                                    originalGoal.pose.position.x - nextGoal.pose.position.x);
+
+                tf2::Quaternion orientation;
+                orientation.setRPY(0, 0, -1*angle);
+                geometry_msgs::Quaternion q;
+                q.w = orientation.getW();
+                q.x = orientation.getX();
+                q.y = orientation.getY();
+                q.z = orientation.getZ();
+
+                originalGoal.pose.orientation = q;
+
+                return;
+            } 
+
+            
+
+        }
+
+
+
+    }
 
     float getCurrentPercentCoverage() {
 
@@ -816,7 +859,7 @@ public:
                     //we can publish reverse
 
                     ros::Rate rate(1);
-                    float maxReversDuration = 3.0;
+                    float maxReversDuration = 2.0;
 
                     geometry_msgs::Twist velocity;
                     velocity.linear.x = -0.2;
@@ -837,6 +880,11 @@ public:
                         }
                     
                         ros::spinOnce();
+
+                        updateRobotLocation();
+
+                        removeGoalsByRobotRout();
+
                     }
 
                     ros::Duration(0.1).sleep();
@@ -1014,133 +1062,7 @@ public:
 
 private:
 
-   void rotateToGoal(geometry_msgs::PoseStamped& originalGoal) {
-
-        tf::StampedTransform transform;
-
-        geometry_msgs::PoseStamped robotOdomPose;
-
-        // fisrt if the robot inside obstacle, we dont want that the robot will rotate in place
-        try
-        {   
-
-            // get current robot pose ODOM frame !!
-            tfListener_.lookupTransform(odomFrame_, baseFrame_,
-                                        ros::Time(0), transform);
-
-            robotOdomPose.header.frame_id = odomFrame_;
-            robotOdomPose.header.stamp = ros::Time::now();
-            robotOdomPose.pose.position.x = transform.getOrigin().x();
-            robotOdomPose.pose.position.y = transform.getOrigin().y();
-            robotOdomPose.pose.position.z = 0;
-            robotOdomPose.pose.orientation.x = transform.getRotation().x();
-            robotOdomPose.pose.orientation.y = transform.getRotation().y();
-            robotOdomPose.pose.orientation.z = transform.getRotation().z();
-            robotOdomPose.pose.orientation.w = transform.getRotation().w();
-
-            float robotHeading  = atan2((2.0 *
-                (robotOdomPose.pose.orientation.w * robotOdomPose.pose.orientation.z + 
-                robotOdomPose.pose.orientation.x * robotOdomPose.pose.orientation.y)),
-                (1.0 - 2.0 * (robotOdomPose.pose.orientation.y * robotOdomPose.pose.orientation.y +
-                 robotOdomPose.pose.orientation.z * robotOdomPose.pose.orientation.z)));
-
-            // convert odom pose to odom pix
-            cv::Point2d robotPix = cv::Point2d( (robotOdomPose.pose.position.x - globalMapOriginPositionX_) / globalMapResolution_,
-                (robotOdomPose.pose.position.y - globalMapOriginPositionY_) / globalMapResolution_ );
-
-            int robotValuCostMap = costMapImg_.at<uchar>(robotPix.y, robotPix.x);
-
-            if( robotValuCostMap == 255){
-                cerr<<"1111 cant rotate in place the robot inside obs "<<endl;
-                return;
-            }
-            float robotRPix = (1.0 / globalMapResolution_) * (robot_w_m_ / 2 );
-            // circle(dbg, robotPix, robotRPix , Scalar(0,255,255), 1, 8, 0);
-
-            float shiftFromCenter = 0.8;
-            float zoneRPix = robotRPix + (1.0 / globalMapResolution_) * (shiftFromCenter / 2 );
-
-            cv::Point2d robotHeadingPointFront(robotPix.x + ( zoneRPix ) * cos(robotHeading),
-                                                    robotPix.y + ( zoneRPix ) * sin(robotHeading));
-
-            cv::Point2d robotHeadingPointBack(robotPix.x + (zoneRPix) * -1* cos(robotHeading),
-                                                    robotPix.y + (zoneRPix) * -1* sin(robotHeading));
-
-            // check if robot blocked in front
-            cv::LineIterator it_map_front(costMapImg_, robotPix, robotHeadingPointFront, 4);  // 4 more dense than 8
-            
-            bool blockedInFront = false;
-            for (int j = 0; j < it_map_front.count; j++, ++it_map_front)
-            {
-                cv::Point2d pointBeam = it_map_front.pos();
-                int valueTemp = costMapImg_.at<uchar>(pointBeam.y, pointBeam.x);
-                if (valueTemp == 255)
-                {
-                    blockedInFront = true;
-                    break;
-                }
-            } 
-            // check if clear behind the robot
-
-            cv::LineIterator it_map_back(costMapImg_, robotPix, robotHeadingPointBack, 4);  // 4 more dense than 8
-
-            bool clearInBack = true;
-            for (int j = 0; j < it_map_back.count; j++, ++it_map_back)
-            {
-                cv::Point2d pointBeam = it_map_back.pos();
-                int valueTemp = costMapImg_.at<uchar>(pointBeam.y, pointBeam.x);
-                if (valueTemp == 255)
-                {
-                    clearInBack = false;
-                    break;
-                }
-            }
-
-            if( !clearInBack || blockedInFront){
-
-                cerr<<" 2222 cant roate in place blocked !!!! "<<endl;
-                return;
-            }
-
-            
-            
-           
-
-        }
-        catch (...)
-        {
-            cerr << " error between " << globalFrame_ << " to " << baseFrame_ << endl;
-            return ;
-        }
-
-
-        // we can rotate to goal in place
-
-        float angleRobotToGoal = atan2(robotPose_.pose.position.y - originalGoal.pose.position.y,
-                                robotPose_.pose.position.x - originalGoal.pose.position.x);
-
-        geometry_msgs::PoseStamped rotationGoal;
-        rotationGoal.pose.position = robotPose_.pose.position;
-        rotationGoal.header.frame_id = globalFrame_;
-        rotationGoal.header.stamp = ros::Time::now();    
-
-        //set the orientation
-        tf2::Quaternion orientation;
-        orientation.setRPY(0, 0, -1* angleRobotToGoal);
-        geometry_msgs::Quaternion q;
-        q.w = orientation.getW();
-        q.x = orientation.getX();
-        q.y = orientation.getY();
-        q.z = orientation.getZ();
-
-        rotationGoal.pose.orientation = q;
-
-        originalGoal.pose.orientation = q;
-        
-        sendGoal(rotationGoal);
-
-   }   
-
+   
 
     void publishRobotHistoryPath() {
 
@@ -1555,10 +1477,9 @@ private:
 
                 /// COVERED = BLACK
                 if( path_poses_with_status_.status_[i] == COVERED){
-
-                    m.color.r = 0;
-                    m.color.g = 0.0;
-                    m.color.b = 0.0;
+                    m.color.r = 1;
+                    m.color.g = 117.0 / 255.0;
+                    m.color.b = 24.0 / 255.0;
 
                 }  /// UN_COVERED = GREEN 
                 else if( path_poses_with_status_.status_[i] == UN_COVERED){
@@ -2027,7 +1948,7 @@ private:
         return "";
     }  
 
-    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg)
+    bool  sendGoal(const geometry_msgs::PoseStamped &goalMsg, int goalIndex = -1, bool in_explore = false)
     {      
 
         //navigate to the point			
@@ -2047,6 +1968,19 @@ private:
             publishRobotHistoryPath();
 
             publishWaypointsWithStatus();
+
+            
+
+
+            // if we already reached the goal, no need to rotate
+            if( goalIndex != -1 ){
+
+                if( path_poses_with_status_.status_[goalIndex] != UN_COVERED ){
+
+                    return true;
+                }                
+                
+            }
 
 
             if( exit_){
