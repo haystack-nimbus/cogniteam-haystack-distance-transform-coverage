@@ -38,7 +38,6 @@ include_directories(
 
 add_executable(map_coverage_node 
     src/map_coverage_ros_node.cpp
-    src/AStar.cpp
     src/MoveBaseController.cpp
 
 )
