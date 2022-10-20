@@ -67,7 +67,7 @@ public:
         bool foundCont = false;
         for( int i =0; i < contours.size(); i++ ){
 
-            if ( pointPolygonTest(contours[i], goal, false) > 0){
+            if ( pointPolygonTest(contours[i], goal, false) >= 0){
                 
                 foundCont = true;
             } else {
@@ -76,9 +76,7 @@ public:
  
             }
         }
-
-        // imshow("imgMap",imgMap);
-        // waitKey(0);
+    
 
 
 

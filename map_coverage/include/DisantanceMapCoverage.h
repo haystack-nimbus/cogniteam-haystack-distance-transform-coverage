@@ -95,14 +95,7 @@ public:
 
     vector<cv::Point> path;
 
-    int wantedCoverArea = getWantedCoverArea(imgMap, start, dist_between_points);
-    cerr << " wantedCoverArea " << wantedCoverArea << endl;
-
-    if (wantedCoverArea == -1)
-    {
-      cerr << " error wantedCoverArea " << endl;
-      return path;
-    }
+   
 
     cv::Mat grayScaleImg = imgMap.clone();
     cvtColor(grayScaleImg, grayScaleImg, COLOR_GRAY2BGR);
@@ -132,7 +125,6 @@ public:
       bool foundN = findNeighborCell(distanceTransformImg, visitedCells, currentP, NeighborCell, grayScaleImg,
                                      dist_between_points);
 
-      totalCoverSoFar = float((son_father_.size() * dist_between_points)) / float(wantedCoverArea);
 
 
 
