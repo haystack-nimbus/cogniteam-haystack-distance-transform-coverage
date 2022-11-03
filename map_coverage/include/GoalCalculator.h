@@ -437,6 +437,7 @@ public:
             }
         }
 
+        cerr<<" freeGoals "<<freeGoals.size()<<endl;
         ////////////////////////////
         cv::Mat edgesContImg = map.clone();
         edgesContImg.setTo(0);
@@ -448,7 +449,8 @@ public:
 
         }       
        
-       
+        imwrite("/home/yakir/distance_transform_coverage_ws/edgesContImg.png", edgesContImg);
+
 
         findContours(edgesContImg, contours, hierarchy, RETR_EXTERNAL,
                      CHAIN_APPROX_NONE, Point(0, 0));     
@@ -469,9 +471,9 @@ public:
 
             int numOfPointInCont = contours[i].size();
 
-            if( numOfPointInCont < 10 ) {
-                continue;
-            }
+            // if( numOfPointInCont < 10 ) {
+            //     continue;
+            // }
             for(int k = 0; k < contours[i].size(); k++ ){
 
                 f.center.x += contours[i][k].x;

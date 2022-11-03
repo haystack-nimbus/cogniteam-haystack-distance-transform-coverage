@@ -8,8 +8,8 @@
     <arg name="sanitization_radius" default="1.0" />  
 
 
-    <arg name="coverage_image_path" default="/haystack_disinfect_report/images/" /> 
-    <!-- <arg name="coverage_image_path" default="/home/yakir/Pictures/" />  -->
+    <!-- <arg name="coverage_image_path" default="/haystack_disinfect_report/images/" />  -->
+    <arg name="coverage_image_path" default="/home/yakir/Pictures/" /> 
 
 
     <arg name="duration_wait_for_move_base_response" default="15.0" />  

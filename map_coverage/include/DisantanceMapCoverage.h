@@ -365,7 +365,7 @@ private:
     {
       validCells[direction] = true;
 
-      if( radiusFreeSpace_ != 0.0 ){
+      if( /*radiusFreeSpace_ != 0.0 */ false ){
         
         cv::Rect r(neighboar.x - (radiusFreeSpace_ ), neighboar.y - (radiusFreeSpace_), 
             radiusFreeSpace_ * 2 , radiusFreeSpace_ * 2);
