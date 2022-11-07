@@ -359,8 +359,8 @@ public:
             for (int i = 0; i < unreachedPointFromFronitiers.size(); i++)
             {
 
-                int radiusPix = (1.0 / mapResolution_) * (walls_inflation_m_);
-                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0));
+                int radiusPix = 1; //(1.0 / mapResolution_) * (walls_inflation_m_);
+                circle(explorationImgMap, unreachedPointFromFronitiers[i], radiusPix, Scalar(0), -1);
             }
 
             switch (explore_state_)
@@ -384,17 +384,18 @@ public:
 
                 cerr << "NAV_TO_NEXT_FRONTIER " << endl;
 
-                float mapScore = 0.0;
 
                 updateRobotLocation();
 
                 auto robotPix = convertPoseToPix(robotPose_);
 
                 std::vector<Frontier> currentEdgesFrontiers;
-                mapScore = goalCalculator.calcEdgesFrontiers(explorationImgMap,
+
+                cerr<<" calcEdgesFrontiers "<<endl;
+                goalCalculator.calcEdgesFrontiers(explorationImgMap,
                                                              currentEdgesFrontiers, robotPix, mapResolution_);
 
-                cerr << "map exploration score: " << mapScore << endl;
+                cerr << "currentEdgesFrontiers size  " << currentEdgesFrontiers.size() << endl;
 
                 if (currentEdgesFrontiers.size() == 0)
                 {
@@ -403,8 +404,18 @@ public:
                     break;
                 }
 
+
+               
                 geometry_msgs::Quaternion q;
-                q.w = 1;
+                auto goalHeading = -1*  atan2(currentEdgesFrontiers[0].center.y - robotPix.y,
+                    currentEdgesFrontiers[0].center.x - robotPix.x);
+                tf2::Quaternion orientation;
+                orientation.setRPY(0, 0, -1 * goalHeading);
+                q.w = orientation.getW();
+                q.x = orientation.getX();
+                q.y = orientation.getY();
+                q.z = orientation.getZ();
+               
                 auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);
 
                 publishEdgesFrontiers(currentEdgesFrontiers);
@@ -449,6 +460,8 @@ public:
 
         int countNumberOfTriesFinsihGoal = 0;
 
+
+
         while (ros::ok())
         {
             ros::spinOnce();
@@ -471,9 +484,11 @@ public:
             {
                 cerr << " COVERAGE_BY_STRAIGHT_LINES " << endl;
 
+                clearAllCostMaps();
+
                 currentAlgoMap_ = getCurrentMap();
-                addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_,
-                        convertPoseToPix(robotPose_));
+                // addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_,
+                //         convertPoseToPix(robotPose_));
 
                 // calculate goal-distance-transform-map
                 cv::Mat distanceTransformImg;
@@ -519,7 +534,7 @@ public:
 
 
                 vector<cv::Point2d> markedGoalsOnMap;
-
+                cerr<<" markedWayPointsByExploration ... "<<endl;
                 markedWayPointsByExploration();
 
 
@@ -577,7 +592,7 @@ public:
                             
                             cerr<<" found goal by connected component !!"<<endl;
                             
-                            clearAllCostMaps();
+                            //clearAllCostMaps();
                             
                             makeReverseIfNeeded();
 
@@ -630,7 +645,11 @@ public:
                     
                     
                     auto nextGoal = convertPixToPose(finalGoalToNavigate, q);
-                    bool result = sendGoal(nextGoal, bestGoalIndexWaypoint);               
+                    bool result = sendGoal(nextGoal, bestGoalIndexWaypoint);  
+
+                    if( !result){
+                        path_poses_with_status_.setStatByIndex( bestGoalIndexWaypoint, COVERED_BY_OBSTACLE);
+                    }            
 
                     iteration++;
 
@@ -744,7 +763,9 @@ public:
                 break;
             }
             case BACK_TO_STARTING_LOCATION:
-            {
+            {   
+                cerr<<" BACK_TO_STARTING_LOCATION : "<<startingLocation_<<" : "<<countNumberOfTriesFinsihGoal<<endl;
+                
                 clearAllCostMaps();
 
                 if (countNumberOfTriesFinsihGoal > 3)
@@ -755,12 +776,9 @@ public:
                     break;
                 }
 
-                cerr << "startingLocation_ : " << startingLocation_.pose.position.x << ", " << startingLocation_.pose.position.y << endl;
-                cerr << "startingLocation_  frame: " << startingLocation_.header.frame_id << endl;
-
                 makeReverseIfNeeded();
 
-                bool result = sendGoal(startingLocation_);
+                bool result = sendGoal(startingLocation_, -1, true );
 
                 if (result)
                 {
@@ -772,7 +790,7 @@ public:
                 }
                 else
                 {
-                    cerr << " Failed to reach BACK_TO_STARTING_LOCATION, try again" << endl;
+                    cerr << " Failed to reach BACK_TO_STARTING_LOCATION, trying again" << endl;
 
                     coverage_state_ = BACK_TO_STARTING_LOCATION;
 
@@ -790,6 +808,13 @@ public:
                 saveCoverageImg();
 
                 coverage_state_ = COVERAGE_DONE;
+
+                if (exit_)
+                {
+
+                    return;
+                }
+
                 break;
             }
 
@@ -805,6 +830,13 @@ public:
                 node_.setParam("/coverage/state", "STOPPED");
 
                 coverage_state_ = ERROR_COVERAGE;
+
+                if (exit_)
+                {
+
+                    return;
+                }
+
                 break;
             }
             }
@@ -823,13 +855,13 @@ public:
         std_srvs::Empty srv;               
         if (client.call(srv))
         {   
-            cerr<<" clearing costmaps!!!!!!";
-            ros::Duration(1).sleep();
+            cerr<<" clearing costmaps!!!!!!"<<endl;
+            ros::Duration(2).sleep();
 
         }
         else
         {
-            cerr<<"errrror clearing costmaps!!!!!!";
+            cerr<<"errrror ->>>> clearing costmaps!!!!!!"<<endl;
             
         }
 
@@ -1776,7 +1808,7 @@ private:
     bool findSafestGoalFromUncoveredGoals(cv::Point2d &nextGoal, 
         const cv::Mat &imgMap, const Path_with_Status &waypointsWithStatus, 
         float goals_m_resolution, float map_resolution,
-        float miAreaForComponentM = 0.5)
+        float miAreaForComponentM = 0.2)
     {
 
         Mat binary = cv::Mat(imgMap.rows, imgMap.cols,
@@ -1792,7 +1824,8 @@ private:
             if (waypointsWithStatus.status_[i] == UN_COVERED)
             {
 
-                circle(binary, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), pixRes, Scalar(255), -1, 8, 0);
+                circle(binary, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]),
+                     pixRes, Scalar(255), -1, 8, 0);
             }
         }
 
@@ -1805,30 +1838,42 @@ private:
 
         if (contours.size() == 0)
         {
-        return false;
+            return false;
         }
+
+        auto robotPix = convertPoseToPix(robotPose_);
 
         float maxArea = 0.0;
         int index = -1;
+        float minDist = 99999.9;
+
+        // find the closest connected component
         for( int i =0; i < contours.size(); i++ ){
 
             Rect r = cv::boundingRect(contours[i]);
             float areaM = (r.width * map_resolution) * (r.height * map_resolution);
 
-            if ( areaM > miAreaForComponentM){
 
-                if ( areaM > maxArea ){
-                    maxArea = areaM;
+            Point center_of_rect = (r.br() + r.tl())*0.5;
+            float dist =
+                    goalCalculator.distanceCalculate(center_of_rect, robotPix);
+            
+            if ( areaM > miAreaForComponentM){
+                
+                if ( dist < minDist){
+                    minDist = dist;
                     index = i;
-                }
-                else {
+                } else {
                     drawContours(binary, contours, i, Scalar(0), -1);
 
                 }
-            } else {
-                drawContours(binary, contours, i, Scalar(0), -1);
-
+                
             }
+            else {
+                drawContours(binary, contours, i, Scalar(0), -1);
+            }
+           
+
         }
 
         
@@ -1836,32 +1881,44 @@ private:
             return false;
         }
 
-        cv::Rect r = cv::boundingRect(contours[index]);
-        cv::Mat cropped = binary(r);
-        Mat dist;
-        cv::distanceTransform(cropped, dist, DIST_L2, 3);
-        // Normalize the distance image for range = {0.0, 1.0}
-        // so we can visualize and threshold it
-        normalize(dist, dist, 0, 1.0, NORM_MINMAX);
+        try {
 
-        double min, max;
-        cv::Point minLoc;
-        cv::Point maxLoc;
-        minMaxLoc(dist, &min, &max, &minLoc, &maxLoc);
+            cv::Rect r = cv::boundingRect(contours[index]);
+            cv::Mat cropped = binary(r);
+            Mat dist;
+            cv::distanceTransform(cropped, dist, DIST_L2, 3);
+            // Normalize the distance image for range = {0.0, 1.0}
+            // so we can visualize and threshold it
+            normalize(dist, dist, 0, 1.0, NORM_MINMAX);
+
+            double min, max;
+            cv::Point minLoc;
+            cv::Point maxLoc;
+            minMaxLoc(dist, &min, &max, &minLoc, &maxLoc);
 
 
-        if (!(maxLoc.x > 0 && maxLoc.y > 0))
+            if (!(maxLoc.x > 0 && maxLoc.y > 0))
+            {
+
+                cerr << " failed to find safe goal";
+                return false;
+            }
+            else
+            {   
+                nextGoal = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
+                cerr<<" found "<<nextGoal<<endl;
+                return true;
+            }
+
+        }
+        catch (cv::Exception &e)
         {
+            const char *err_msg = e.what();
+            std::cerr << "exception caught: " << err_msg << std::endl;
 
-            cerr << " failed to find safe goal";
             return false;
         }
-        else
-        {   
-            nextGoal = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
-            cerr<<" found "<<nextGoal<<endl;
-            return true;
-        }
+        
 
         return false;
 
@@ -1876,7 +1933,6 @@ private:
         if (findSafestGoalFromUncoveredGoals(finalGoalToNavigate,
             imgMap, waypointsWithStatus, goals_m_resolution, mapResolution_))
         {
-            // circle(imgMap, nextGoal, goals_m_resolution / mapResolution_, Scalar(0), -1, 8, 0);
 
 
             return true;
@@ -1958,7 +2014,7 @@ private:
         auto durationFromLastCalc = duration_cast<seconds>(endLocalCostMap - startLocalCostMap_).count();
 
         /// do this every 2 seconds
-        if (init_ && durationFromLastCalc > 0.3 )
+        if (init_ && durationFromLastCalc > 0.5 )
         {
 
             costMapImg_ = cv::Mat(msg->info.height, msg->info.width, CV_8UC1, Scalar(0));
@@ -2025,28 +2081,18 @@ private:
                 {
 
                     // the goal inside the wanted radius
-                    if (distRobotFromGoal < 8.0)
-                    {
-
-                        path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
-                    }
-                    else
-                    {
-
-                        /// goal outside the raius, make it uncovered
-                        path_poses_with_status_.setStatByIndex(i, UN_COVERED);
-                    }
+                    path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
 
                     // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
 
-                } /// goal not inside obstacle
+                } 
+                /// goal not inside obstacle
                 else
                 {
 
                     // if inside radius but last time int was inside obstacle,
                     // keep it as obstacle
-                    if (distRobotFromGoal < 2.0 &&
-                        path_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
+                    if (path_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
                     {
 
                         path_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
@@ -2111,7 +2157,7 @@ private:
 
         mappingMap_ = currentGlobalMap_.clone();
 
-        // addDilationForGlobalMap(currentGlobalMap_, /*walls_inflation_m_*/0.1, mapResolution_);
+        addDilationForGlobalMap(currentGlobalMap_, 0.05, mapResolution_);
 
         addFreeSpaceDilation(currentGlobalMap_);
     }
@@ -2714,10 +2760,12 @@ private:
 
             if ( in_explore){
 
-                if (goalCalculator.distanceCalculate(
+                float distDromRobot = goalCalculator.distanceCalculate(
                     cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y), 
-                        cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y)) < 0.2){
-                
+                        cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
+
+                if ( distDromRobot < 0.35){
+                    cerr<<" cancel the goal !! "<<endl;
                     moveBaseController_.moveBaseClient_.cancelGoal();
                     return true;
                 
@@ -2768,7 +2816,7 @@ private:
 
     void saveCoverageImg()
     {
-
+        
         if (!imgSaved_ && mappingMap_.data)
         {
 
@@ -2785,14 +2833,7 @@ private:
             //     cv::line(patternImg, path_poses_with_status_.path_[i],
             //              path_poses_with_status_.path_[i + 1], Scalar(34, 139, 139), 1);
             // }
-
-            // draw the robot trace (INCLUDE DIMS)
-            for (int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++)
-            {
-                circle(robotTreaceImg, convertPoseToPix(robotHistoryPathMsg_.poses[i]), sanitization_radius_  / mapResolution_,
-                     Scalar(250, 206, 135), -1, 8, 0);
-                 
-            }
+            
 
             // put back the black and the gray color to the map 
             for (int j = 0; j < mappingMap_.rows; j++)
@@ -2817,16 +2858,7 @@ private:
                         robotTreaceImg.at<cv::Vec3b>(j, i)[2] = 205;
                     }
                 }
-            }
-            // draw the trace only
-            for (int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++)
-            {
-
-                cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
-                cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i + 1]);
-
-                cv::line(robotTreaceImg, p1, p2, Scalar(238, 104, 123), 1);
-            }
+            }           
 
             // draw the grid
             for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
@@ -2848,6 +2880,17 @@ private:
                 }
 
                 
+            }
+
+            // draw the trace only
+            for (int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++)
+            {
+
+                cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
+                cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i + 1]);
+
+                cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 255), 1);
+
             }
 
             /*
@@ -2878,7 +2921,13 @@ private:
     void addDilationByGlobalCostMap(const Mat& globalCostMap, Mat& algoMap,
          const cv::Point2d& robotBaseFootPrint ) {
 
-        if(!costMapImg_.data || !algoMap.data || robotBaseFootPrint.x < 0 || robotBaseFootPrint.y < 0){
+        cerr<<"trying to addDilationByGlobalCostMap "<<endl;
+    
+        if(!globalCostMap.data || !algoMap.data ||
+            robotBaseFootPrint.x < 0 || robotBaseFootPrint.y < 0 
+            || robotBaseFootPrint.x > algoMap.cols || robotBaseFootPrint.y > algoMap.rows){
+
+            cerr<<" failed to addDilationByGlobalCostMap "<<endl;
             return;
         }        
         cv::Point2d mapCenter(algoMap.cols /2 , algoMap.rows / 2);
@@ -2894,29 +2943,41 @@ private:
         int deltaRobotX = mapCenter.x - robotBaseFootPrint.x;
         int deltaRobotY = mapCenter.y - robotBaseFootPrint.y;
 
-
-        for (int y = 0; y < globalCostMap.rows; y++)
+        try
         {
-            for (int x = 0; x < globalCostMap.cols; x++)
+            for (int y = 0; y < globalCostMap.rows; y++)
             {
-
-                int value = globalCostMap.at<uchar>(y, x);
-
-                if (value > 0)
+                for (int x = 0; x < globalCostMap.cols; x++)
                 {
-                    cv::Point2d nP(x + (mapCenter.x - costMapCenter.x) - deltaRobotX , 
-                        y + (mapCenter.y - costMapCenter.y)  - deltaRobotY);
 
-                    //  cv::Point2d nP(x + (mapCenter.x - costMapCenter.x), 
-                    //     y + (mapCenter.y - costMapCenter.y)  );
+                    int value = globalCostMap.at<uchar>(y, x);
+
+                    if (value > 0)
+                    {
+                        cv::Point2d nP(x + (mapCenter.x - costMapCenter.x) - deltaRobotX , 
+                            y + (mapCenter.y - costMapCenter.y)  - deltaRobotY);
+
+                        //  cv::Point2d nP(x + (mapCenter.x - costMapCenter.x), 
+                        //     y + (mapCenter.y - costMapCenter.y)  );
+
+                        if( nP.x > 0 && nP.y > 0 && 
+                            nP.x < algoMap.cols && nP.y < algoMap.rows ){
+                            
+                            algoMap.at<uchar>(nP.y , nP.x) = 0;
+                        }                    
+                    }
                 
-
-                    algoMap.at<uchar>(nP.y , nP.x) = 0;
-                   
                 }
-            
             }
+        
         }
+        catch (cv::Exception &e)
+        {
+            const char *err_msg = e.what();
+            std::cerr << "exception caught: " << err_msg << std::endl;
+        }
+
+       
 
     }
 

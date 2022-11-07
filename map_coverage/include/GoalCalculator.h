@@ -320,7 +320,7 @@ public:
     }
 
 
-    float calcEdgesFrontiers(const Mat& map, 
+    void calcEdgesFrontiers(const Mat& map, 
         std::vector<Frontier>& currentEdgesFrontiers,
         const cv::Point& robotPix, float mapResolution) {
 
@@ -329,19 +329,19 @@ public:
         binarayImage.setTo(0, map == 205);
 
 
-        //count num of wall points
-        float numOfBlockedPoints = 0.0;
-        for (int y = 0; y < map.rows; y++)
-        {
-            for (int x = 0; x < map.cols; x++)
-            {
-                int val = map.at<uchar>(y, x);
+        // //count num of wall points
+        // float numOfBlockedPoints = 0.0;
+        // for (int y = 0; y < map.rows; y++)
+        // {
+        //     for (int x = 0; x < map.cols; x++)
+        //     {
+        //         int val = map.at<uchar>(y, x);
 
-                if ( val == 0){
-                    numOfBlockedPoints+= 1;
-                } 
-            }
-        }
+        //         if ( val == 0){
+        //             numOfBlockedPoints+= 1;
+        //         } 
+        //     }
+        // }
 
 
         vector<vector<Point>> contours;
@@ -349,9 +349,11 @@ public:
 
         findContours(binarayImage, contours, hierarchy, RETR_EXTERNAL,
                      CHAIN_APPROX_NONE, Point(0, 0));
-       
+
+        cerr<<" contours blobs size "<<contours.size()<<endl;
+
         if (contours.size() == 0){
-            return -1;
+            return;
         }
 
 
@@ -367,7 +369,10 @@ public:
             if (area > maxArea)
             {   maxArea = area;
                 index = i;
-            }            
+            } else {
+                drawContours(binarayImage, contours, i, Scalar(0), -1);
+
+            }       
         }
 
        
@@ -375,7 +380,6 @@ public:
         if( index == -1){
 
             cerr<<" no blobs "<<endl;
-            return -1;
         }
 
         vector<cv::Point> freeGoals;
@@ -386,6 +390,7 @@ public:
             bool foundCollision = false;
 
             int val = map.at<uchar>(p.y, p.x);
+            
             if( val != 254){  
                 
                 foundCollision = true;
@@ -437,7 +442,7 @@ public:
             }
         }
 
-        cerr<<" freeGoals "<<freeGoals.size()<<endl;
+        cerr<<" freeGoals size "<<freeGoals.size()<<endl;
         ////////////////////////////
         cv::Mat edgesContImg = map.clone();
         edgesContImg.setTo(0);
@@ -449,13 +454,15 @@ public:
 
         }       
        
-        imwrite("/home/yakir/distance_transform_coverage_ws/edgesContImg.png", edgesContImg);
 
 
         findContours(edgesContImg, contours, hierarchy, RETR_EXTERNAL,
                      CHAIN_APPROX_NONE, Point(0, 0));     
 
-
+        // imwrite("/home/yakir/distance_transform_coverage_ws/binarayImage.png", binarayImage);
+        // imwrite("/home/yakir/distance_transform_coverage_ws/edgesContImg.png", edgesContImg);
+        // imwrite("/home/yakir/distance_transform_coverage_ws/debug.png", debug);
+   
         // imshow("debug",debug);
         // imshow("edgesContImg",edgesContImg);
         // waitKey(0);  
@@ -471,9 +478,7 @@ public:
 
             int numOfPointInCont = contours[i].size();
 
-            // if( numOfPointInCont < 10 ) {
-            //     continue;
-            // }
+            
             for(int k = 0; k < contours[i].size(); k++ ){
 
                 f.center.x += contours[i][k].x;
@@ -499,25 +504,6 @@ public:
         std::sort( currentEdgesFrontiers.begin(), currentEdgesFrontiers.end(),
               []( const Frontier &left, const Frontier &right )
                  { return ( left.distFromPosition < right.distFromPosition ); } );
-
-        //calculate map score
-        
-        if( numOfBlockedPoints + totalFreePoints == 0 ){
-            return   -1;
-        }
-
-        float score =  numOfBlockedPoints / float(numOfBlockedPoints + totalFreePoints);
-
-        if( score > 1.0){
-            score = 1.0;
-        }
-
-        if( score  < 0){
-            score = -1;
-        }
-
-        return score * 100;
-
 
 
     }
