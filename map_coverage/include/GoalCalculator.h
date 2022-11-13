@@ -320,193 +320,394 @@ public:
     }
 
 
-    void calcEdgesFrontiers(const Mat& map, 
-        std::vector<Frontier>& currentEdgesFrontiers,
-        const cv::Point& robotPix, float mapResolution) {
+    // int cc = 0;
+    void calcEdgesFrontiers(const Mat& map, std::vector<Frontier>& currentEdgesFrontiers, const cv::Point& robotPix,
+                            float mapResolution,
+                            const vector<cv::Point2d>& unreachedPointFromFronitiers) {
 
         cv::Mat binarayImage = map.clone();
-        binarayImage.setTo(255, map == 254); 
-        binarayImage.setTo(0, map == 205);
-
-
-        // //count num of wall points
-        // float numOfBlockedPoints = 0.0;
-        // for (int y = 0; y < map.rows; y++)
-        // {
-        //     for (int x = 0; x < map.cols; x++)
-        //     {
-        //         int val = map.at<uchar>(y, x);
-
-        //         if ( val == 0){
-        //             numOfBlockedPoints+= 1;
-        //         } 
-        //     }
-        // }
+        binarayImage.setTo(255, map >= 254);
+        binarayImage.setTo(0, binarayImage != 255);
 
 
         vector<vector<Point>> contours;
         vector<Vec4i> hierarchy;
 
-        findContours(binarayImage, contours, hierarchy, RETR_EXTERNAL,
-                     CHAIN_APPROX_NONE, Point(0, 0));
+        findContours(binarayImage, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE, Point(0, 0));  
 
-        cerr<<" contours blobs size "<<contours.size()<<endl;
+        cerr << " contours blobs size " << contours.size() << endl;
 
-        if (contours.size() == 0){
+        if (contours.size() == 0)
+        {   
+            cerr<<" cant find any contours (white blobs "<<endl;
             return;
         }
 
-
-
-        cv::Mat debug = map.clone();
-        cvtColor(debug, debug, COLOR_GRAY2BGR);
-
+        
+        // find the largest white blob
         int maxArea = 0;
         int index = -1;
         for (int i = 0; i < contours.size(); i++)
         {
             double area = contourArea(contours[i]);
             if (area > maxArea)
-            {   maxArea = area;
+            {
+                maxArea = area;
                 index = i;
-            } else {
-                drawContours(binarayImage, contours, i, Scalar(0), -1);
-
-            }       
-        }
-
-       
-
-        if( index == -1){
-
-            cerr<<" no blobs "<<endl;
-        }
-
-        vector<cv::Point> freeGoals;
-        for(int i = 0; i < contours[index].size(); i++){
-
-            cv::Point p = contours[index][i];
-
-            bool foundCollision = false;
-
-            int val = map.at<uchar>(p.y, p.x);
-            
-            if( val != 254){  
-                
-                foundCollision = true;
-                continue;
-            }     
-
-            for (int ray_angle = 0; ray_angle < 360; ray_angle++) {
-                
-                ///meters
-                cv::Point2d rayPix;
-                rayPix.x = p.x + (2 * cos(angles::from_degrees(ray_angle)));
-                rayPix.y = p.y + (2 * sin(angles::from_degrees(ray_angle)));
-            
-                /// out of map
-                if (rayPix.x > map.cols || rayPix.y > map.rows ||
-                    rayPix.x < 0 || rayPix.y < 0)
-                {   
-                    foundCollision = true;
-                    continue;
-                }            
-                
-                cv::LineIterator it_globalMap(map, p, rayPix, 4 ); //4 more dense than 8
-              
-                for (int j = 0; j < it_globalMap.count; j++, ++it_globalMap)
-                {
-                    cv::Point2d pointBeam = it_globalMap.pos();                  
-                  
-                    if (pointBeam.x > map.cols || pointBeam.y > map.rows ||
-                        pointBeam.x < 0 || pointBeam.y < 0)
-                    {   
-                        foundCollision = true; 
-                        break;
-                    }                      
-
-                  
-                    int value = map.at<uchar>(pointBeam.y, pointBeam.x);
-
-                    if (value == 0)
-                    {                           
-                        foundCollision = true; 
-                        break;
-                    }
-                    
-                }           
             }
             
-            if( !foundCollision){
-                freeGoals.push_back(p);
-            }
         }
 
-        cerr<<" freeGoals size "<<freeGoals.size()<<endl;
-        ////////////////////////////
-        cv::Mat edgesContImg = map.clone();
-        edgesContImg.setTo(0);
-        contours.clear();
-        hierarchy.clear();
+        for(int i = 0; i < contours.size(); i ++){
+
+            if( i != index)
+                 drawContours( binarayImage, contours, i, Scalar(0), -1, LINE_8, hierarchy, 0 );
+
+        }
         
-        for(int i =0; i < freeGoals.size(); i++){
-           edgesContImg.at<uchar>(freeGoals[i].y, freeGoals[i].x) = 255;          
-
-        }       
+        for(int i = 0; i < unreachedPointFromFronitiers.size(); i++){
+            
+            binarayImage.at<uchar>(unreachedPointFromFronitiers[i].y, unreachedPointFromFronitiers[i].x) = 0;
+        }
        
+        // imshow("binarayImage", binarayImage);
+        // waitKey(0);
+        
+        Mat freePixImg = cv::Mat(map.rows, map.cols , CV_8UC1, Scalar(0));
+        vector<cv::Point> free_points;
 
+        // loop over white blob iamge and find white pix that have gray Neighbors
+        for (int j = 0; j < binarayImage.rows; j++)
+        {
+        for (int i = 0; i < binarayImage.cols; i++)
+        {
+            cv::Point2d currentP(i, j);
 
-        findContours(edgesContImg, contours, hierarchy, RETR_EXTERNAL,
-                     CHAIN_APPROX_NONE, Point(0, 0));     
+            auto value = binarayImage.at<uchar>(currentP);
 
-        // imwrite("/home/yakir/distance_transform_coverage_ws/binarayImage.png", binarayImage);
-        // imwrite("/home/yakir/distance_transform_coverage_ws/edgesContImg.png", edgesContImg);
-        // imwrite("/home/yakir/distance_transform_coverage_ws/debug.png", debug);
-   
-        // imshow("debug",debug);
-        // imshow("edgesContImg",edgesContImg);
-        // waitKey(0);  
-
-        float totalFreePoints = 0;
-        for (int i = 0; i < contours.size(); i++) {
+            if ( value == 255) {
             
-            Frontier f;
-            f.contour =  contours[i];
+                // the Neighbors
+                cv::Point up(currentP.x, currentP.y - 1);
+                cv::Point down(currentP.x, currentP.y + 1);
 
-            f.center.x = 0;
-            f.center.y = 0;
+                cv::Point left(currentP.x - 1, currentP.y);
+                cv::Point right(currentP.x + 1, currentP.y);
 
-            int numOfPointInCont = contours[i].size();
+                cv::Point topRight(currentP.x + 1, currentP.y - 1);
+                cv::Point topLeft(currentP.x - 1, currentP.y - 1);
 
-            
-            for(int k = 0; k < contours[i].size(); k++ ){
+                cv::Point downRight(currentP.x + 1, currentP.y + 1);
+                cv::Point downLeft(currentP.x - 1, currentP.y + 1);
 
-                f.center.x += contours[i][k].x;
-                f.center.y += contours[i][k].y;
+                if( map.at<uchar>(up) == 205 || 
+                    map.at<uchar>(down) == 205 ||
+                    map.at<uchar>(left) == 205 ||
+                    map.at<uchar>(right) == 205 ||
+                    map.at<uchar>(topRight) == 205 ||
+                    map.at<uchar>(topLeft) == 205 ||
+                    map.at<uchar>(downLeft) == 205 || 
+                    map.at<uchar>(downRight) == 205 ) {
+                
+
+                    freePixImg.at<uchar>(currentP) = 255; 
+
+                    free_points.push_back(currentP);        
+                }
+                    
+            }        
+        }
+        } 
+
+        // imwrite("/home/yakir/distance_transform_coverage_ws/data/binarayImage" +to_string(cc) +".png",binarayImage);
+        // imwrite("/home/yakir/distance_transform_coverage_ws/data/freePixImg" +to_string(cc) +".png",freePixImg);
+
+        // cc++;
+        
+        // find the connected components and the centroids of them
+
+        Mat labelImage(freePixImg.size(), CV_32S);
+        Mat cnetroids;
+        Mat statesImage(freePixImg.size(), CV_32S);
+
+        int nLabels = connectedComponentsWithStats(freePixImg,labelImage,
+                    statesImage, cnetroids, 8);
+        
+        cerr<<" nLabels "<<nLabels<<endl;
+        if( nLabels == 0){
+
+            cerr<<" there is no connected componnets !!"<<endl;
+            return;
+        }
+
+        // cv::Mat debug = freePixImg.clone();
+        // cvtColor(debug, debug, COLOR_GRAY2BGR);
+
+
+        cerr<<" free_points "<<free_points.size()<<endl;
+        vector<cv::Point> finalCneters;
+        
+        // loop over each centorid
+        for(int row = 0; row < cnetroids.rows; row++){
+            float x = cnetroids.at<double>(row, 0);
+            float y = cnetroids.at<double>(row, 1);
+
+            if(row == 0){
+                continue;
             }
+            //create the centroid
+            cv::Point2d center(x, y);
+            
+            float minDist = 9999.9;
+            int index = -1;
 
-            f.center.x = (float)f.center.x / (float)contours[i].size();
-            f.center.y = (float)f.center.y / (float)contours[i].size();
+            // if the centorid is not on free space,
+            // update the cnetorid to be on the closest free space point
+            if( freePixImg.at<uchar>(center.y , center.x) != 255 ) {               
 
-            f.distFromPosition =   distanceCalculate(f.center, robotPix);
+                //find the closest white point to the center and ovveride the cnter
+                for(int k = 0; k < free_points.size(); k++ ) {              
 
-            float areaInPix = cv::contourArea(contours[i]);
-            float contAreaM =  (1.0 / mapResolution) * ( areaInPix);    
+                    float dist = distanceCalculate(free_points[k], center);
+                    if (dist < minDist){
+                        minDist = dist;
+                        index = k;
+                    }              
+                }
 
-            cerr<<" the frontier area in M "<<contAreaM<<" areaInPix "<<areaInPix<<endl;
-            currentEdgesFrontiers.push_back(f);
+                // shift the centoird to closest white pix
+                if ( index != -1){
+                    
+                    center = free_points[index];
+                    finalCneters.push_back(center);
+                }
+            
 
-            totalFreePoints += f.contour.size();
-        }    
+            } else {
 
+                 
+                //the centroid already on white pix
+                finalCneters.push_back(center);
+            }
+        
+
+        }
+
+
+        // create the list of currentEdgesFrontiers
+        for(int i = 0; i < finalCneters.size(); i++) {       
+
+            Frontier f;
+            f.center = finalCneters[i];
+            f.distFromPosition = distanceCalculate(f.center, robotPix);
+
+            currentEdgesFrontiers.push_back(f); 
+        }   
 
         // sort the frontier
         std::sort( currentEdgesFrontiers.begin(), currentEdgesFrontiers.end(),
               []( const Frontier &left, const Frontier &right )
                  { return ( left.distFromPosition < right.distFromPosition ); } );
+        
+
+        
+        // imshow( "Connected Components", dst );
+        // imshow("freePixImg",freePixImg);
+        //imshow( "cnetroidImage", cnetroidImage );
 
 
+        // resize(debug, debug, cv::Size(debug.cols * 3, debug.rows * 3));  
+        // imshow("debug",debug);
+        // waitKey(0);                   
     }
+
+    // void calcEdgesFrontiers(const Mat& map, 
+    //     std::vector<Frontier>& currentEdgesFrontiers,
+    //     const cv::Point& robotPix, float mapResolution) {
+
+    //     cv::Mat binarayImage = map.clone();
+    //     binarayImage.setTo(255, map == 254); 
+    //     binarayImage.setTo(0, map == 205);
+
+
+    //     // //count num of wall points
+    //     // float numOfBlockedPoints = 0.0;
+    //     // for (int y = 0; y < map.rows; y++)
+    //     // {
+    //     //     for (int x = 0; x < map.cols; x++)
+    //     //     {
+    //     //         int val = map.at<uchar>(y, x);
+
+    //     //         if ( val == 0){
+    //     //             numOfBlockedPoints+= 1;
+    //     //         } 
+    //     //     }
+    //     // }
+
+
+    //     vector<vector<Point>> contours;
+    //     vector<Vec4i> hierarchy;
+
+    //     findContours(binarayImage, contours, hierarchy, RETR_EXTERNAL,
+    //                  CHAIN_APPROX_NONE, Point(0, 0));
+
+    //     cerr<<" contours blobs size "<<contours.size()<<endl;
+
+    //     if (contours.size() == 0){
+    //         return;
+    //     }
+
+
+
+    //     cv::Mat debug = map.clone();
+    //     cvtColor(debug, debug, COLOR_GRAY2BGR);
+
+    //     int maxArea = 0;
+    //     int index = -1;
+    //     for (int i = 0; i < contours.size(); i++)
+    //     {
+    //         double area = contourArea(contours[i]);
+    //         if (area > maxArea)
+    //         {   maxArea = area;
+    //             index = i;
+    //         } else {
+    //             drawContours(binarayImage, contours, i, Scalar(0), -1);
+
+    //         }       
+    //     }
+
+       
+
+    //     if( index == -1){
+
+    //         cerr<<" no blobs "<<endl;
+    //     }
+
+    //     vector<cv::Point> freeGoals;
+    //     for(int i = 0; i < contours[index].size(); i++){
+
+    //         cv::Point p = contours[index][i];
+
+    //         bool foundCollision = false;
+
+    //         int val = map.at<uchar>(p.y, p.x);
+            
+    //         if( val != 254){  
+                
+    //             foundCollision = true;
+    //             continue;
+    //         }     
+
+    //         for (int ray_angle = 0; ray_angle < 360; ray_angle++) {
+                
+    //             ///meters
+    //             cv::Point2d rayPix;
+    //             rayPix.x = p.x + (2 * cos(angles::from_degrees(ray_angle)));
+    //             rayPix.y = p.y + (2 * sin(angles::from_degrees(ray_angle)));
+            
+    //             /// out of map
+    //             if (rayPix.x > map.cols || rayPix.y > map.rows ||
+    //                 rayPix.x < 0 || rayPix.y < 0)
+    //             {   
+    //                 foundCollision = true;
+    //                 continue;
+    //             }            
+                
+    //             cv::LineIterator it_globalMap(map, p, rayPix, 4 ); //4 more dense than 8
+              
+    //             for (int j = 0; j < it_globalMap.count; j++, ++it_globalMap)
+    //             {
+    //                 cv::Point2d pointBeam = it_globalMap.pos();                  
+                  
+    //                 if (pointBeam.x > map.cols || pointBeam.y > map.rows ||
+    //                     pointBeam.x < 0 || pointBeam.y < 0)
+    //                 {   
+    //                     foundCollision = true; 
+    //                     break;
+    //                 }                      
+
+                  
+    //                 int value = map.at<uchar>(pointBeam.y, pointBeam.x);
+
+    //                 if (value == 0)
+    //                 {                           
+    //                     foundCollision = true; 
+    //                     break;
+    //                 }
+                    
+    //             }           
+    //         }
+            
+    //         if( !foundCollision){
+    //             freeGoals.push_back(p);
+    //         }
+    //     }
+
+    //     cerr<<" freeGoals size "<<freeGoals.size()<<endl;
+    //     ////////////////////////////
+    //     cv::Mat edgesContImg = map.clone();
+    //     edgesContImg.setTo(0);
+    //     contours.clear();
+    //     hierarchy.clear();
+        
+    //     for(int i =0; i < freeGoals.size(); i++){
+    //        edgesContImg.at<uchar>(freeGoals[i].y, freeGoals[i].x) = 255;          
+
+    //     }       
+       
+
+
+    //     findContours(edgesContImg, contours, hierarchy, RETR_EXTERNAL,
+    //                  CHAIN_APPROX_NONE, Point(0, 0));     
+
+    //     // imwrite("/home/yakir/distance_transform_coverage_ws/binarayImage.png", binarayImage);
+    //     // imwrite("/home/yakir/distance_transform_coverage_ws/edgesContImg.png", edgesContImg);
+    //     // imwrite("/home/yakir/distance_transform_coverage_ws/debug.png", debug);
+   
+    //     // imshow("debug",debug);
+    //     // imshow("edgesContImg",edgesContImg);
+    //     // waitKey(0);  
+
+    //     float totalFreePoints = 0;
+    //     for (int i = 0; i < contours.size(); i++) {
+            
+    //         Frontier f;
+    //         f.contour =  contours[i];
+
+    //         f.center.x = 0;
+    //         f.center.y = 0;
+
+    //         int numOfPointInCont = contours[i].size();
+
+            
+    //         for(int k = 0; k < contours[i].size(); k++ ){
+
+    //             f.center.x += contours[i][k].x;
+    //             f.center.y += contours[i][k].y;
+    //         }
+
+    //         f.center.x = (float)f.center.x / (float)contours[i].size();
+    //         f.center.y = (float)f.center.y / (float)contours[i].size();
+
+    //         f.distFromPosition =   distanceCalculate(f.center, robotPix);
+
+    //         float areaInPix = cv::contourArea(contours[i]);
+    //         float contAreaM =  (1.0 / mapResolution) * ( areaInPix);    
+
+    //         cerr<<" the frontier area in M "<<contAreaM<<" areaInPix "<<areaInPix<<endl;
+    //         currentEdgesFrontiers.push_back(f);
+
+    //         totalFreePoints += f.contour.size();
+    //     }    
+
+
+    //     // sort the frontier
+    //     std::sort( currentEdgesFrontiers.begin(), currentEdgesFrontiers.end(),
+    //           []( const Frontier &left, const Frontier &right )
+    //              { return ( left.distFromPosition < right.distFromPosition ); } );
+
+
+    // }
 
     // find the start and the goal for path coverage by diff maps
     bool foundGoalFromDiffMap(const Mat &prevMap, const Mat &map, 
