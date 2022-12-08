@@ -417,29 +417,7 @@ public:
               if ( !canRotateInPlace ){
 
                 smallReverseAllowed_ = true;
-                geometry_msgs::Twist velocity;
-                velocity.linear.x = -0.2;
-
-                auto startTime = ros::WallTime::now();
-                // small rverse
-                ros::Rate rate(1);
-                while (ros::ok())
-                {
-                  cerr << " REEEEEEVERSE !!!!!!!!!! " << endl;
-                  reverse_cmd_vel_pub_.publish(velocity);
-                  rate.sleep();
-
-                  auto end = ros::WallTime::now();
-
-                  auto duration = (end - startTime).toSec();
-                  if (duration > 3)
-                  {
-                    break;
-                  }
-
-                  ros::spinOnce();
-                  
-                } 
+                
 
                 smallReverseAllowed_ = false;
               }  
@@ -472,7 +450,33 @@ public:
     return false;
   }
 
+  void makeSmallReverse() {
 
+    geometry_msgs::Twist velocity;
+    velocity.linear.x = -0.2;
+
+    auto startTime = ros::WallTime::now();
+    // small rverse
+    ros::Rate rate(1);
+    while (ros::ok())
+    {
+      cerr << " SMALL REEEEEEVERSE !!!!!!!!!! " << endl;
+      reverse_cmd_vel_pub_.publish(velocity);
+      rate.sleep();
+
+      updateRobotLocation(); 
+      auto end = ros::WallTime::now();
+
+      auto duration = (end - startTime).toSec();
+      if (duration > 2)
+      {
+        break;
+      }
+
+      ros::spinOnce();
+      
+    } 
+  }
   bool reverseLogic(const nav_msgs::Path& wanted_path,
      const geometry_msgs::PoseStamped& wantedGoal) {
     
@@ -489,7 +493,10 @@ public:
     float robotHeadingDeg = angles::to_degrees(robotHeading);
     int minNumOfPointsOnPath = 10;
     if( wanted_path.poses.size() < minNumOfPointsOnPath){
+      
+      cerr<<" path backward to small !"<<endl;
       return false; /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
+
     }
 
     // CALCULATE THE HEADING OF THE PATH FROM THE ROBOT
@@ -520,10 +527,10 @@ public:
         return false;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
       }
      
-      bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 
-          0, 0.2);
-
-      
+      bool canRotateInPlace =
+         checkIfRobotIsBlocked(safetyMap, robotPose_, 
+         robot_w_m_, robot_h_m_, 
+          0, 0.2);      
 
       if(!canRotateInPlace){
         
@@ -538,6 +545,7 @@ public:
              robot_w_m_, robot_h_m_, 
             0, 0.2);
 
+          cerr<<i<<" : check safe 180 roate ... "<<robotHistoryPathMsg_.poses[i].pose.position.x<<" ," <<robotHistoryPathMsg_.poses[i].pose.position.y<<endl;
           if (canRotateInPlace){           
 
             // set orienation to this goal (rotate 180)
@@ -548,8 +556,6 @@ public:
                             robotHistoryPathMsg_.poses[i].pose.orientation.z * robotHistoryPathMsg_.poses[i].pose.orientation.z)));
 
             double wanted_heading = robotHeading + angles::from_degrees(180);
-            cerr<<" wanted_heading of reverse goal is "<<wanted_heading<<endl;
-
             geometry_msgs::PoseStamped reverseGoal;
             reverseGoal.header.frame_id = globalFrame_;
             reverseGoal.pose.position =  robotHistoryPathMsg_.poses[i].pose.position;
@@ -584,7 +590,7 @@ public:
 
             backward_goal_marker_pub_.publish(marker);
 
-            cerr<<"send the reverse goal "<<endl;
+            cerr<<"send the reverse goal !!!!!"<<endl;
             //seng goal backward direction
             bool result = sendGoal(reverseGoal, -1);
 
@@ -981,29 +987,8 @@ public:
                     if ( !canRotateInPlace ){
 
                       smallReverseAllowed_ = true;
-                      geometry_msgs::Twist velocity;
-                      velocity.linear.x = -0.2;
-
-                      auto startTime = ros::WallTime::now();
-                      // small rverse
-                      ros::Rate rate(1);
-                      while (ros::ok())
-                      {
-                        cerr << " REEEEEEVERSE !!!!!!!!!! " << endl;
-                        reverse_cmd_vel_pub_.publish(velocity);
-                        rate.sleep();
-
-                        auto end = ros::WallTime::now();
-
-                        auto duration = (end - startTime).toSec();
-                        if (duration > 4)
-                        {
-                          break;
-                        }
-
-                        ros::spinOnce();
-                        
-                      } 
+                      
+                      makeSmallReverse();
 
                       smallReverseAllowed_ = false;
                     }  
@@ -1070,29 +1055,7 @@ public:
                 if ( !canRotateInPlace ){
 
                   smallReverseAllowed_ = true;
-                  geometry_msgs::Twist velocity;
-                  velocity.linear.x = -0.2;
-
-                  auto startTime = ros::WallTime::now();
-                  // small rverse
-                  ros::Rate rate(1);
-                  while (ros::ok())
-                  {
-                    cerr << " REEEEEEVERSE !!!!!!!!!! " << endl;
-                    reverse_cmd_vel_pub_.publish(velocity);
-                    rate.sleep();
-
-                    auto end = ros::WallTime::now();
-
-                    auto duration = (end - startTime).toSec();
-                    if (duration > 3)
-                    {
-                      break;
-                    }
-
-                    ros::spinOnce();
-                    
-                  } 
+                  makeSmallReverse();
 
                   smallReverseAllowed_ = false;
                 }  
@@ -3298,16 +3261,16 @@ private:
 
   void setReverse(){  
 
-    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x -0.3");
-    ros::Duration(3).sleep();
+    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x -0.1");
+    ros::Duration(1).sleep();
 
     reversAllowed_ = true;
   } 
 
   void disableReverse(){  
 
-    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x 0.1");
-    ros::Duration(3).sleep();
+    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x 0.0");
+    ros::Duration(1).sleep();
 
     reversAllowed_ = false;
 
