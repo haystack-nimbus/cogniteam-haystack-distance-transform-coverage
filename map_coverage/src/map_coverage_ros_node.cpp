@@ -545,7 +545,19 @@ public:
              robot_w_m_, robot_h_m_, 
             0, 0.2);
 
-          cerr<<i<<" : check safe 180 roate ... "<<robotHistoryPathMsg_.poses[i].pose.position.x<<" ," <<robotHistoryPathMsg_.poses[i].pose.position.y<<endl;
+          if( i != robotHistoryPathMsg_.poses.size() -1 && (i - 1) > 0){
+            
+            float diffLocationsM =
+              goalCalculator.distanceCalculate(cv::Point2d(robotHistoryPathMsg_.poses[i].pose.position.x,
+                             robotHistoryPathMsg_.poses[i].pose.position.y),
+                            cv::Point2d(robotHistoryPathMsg_.poses[i-1].pose.position.x, 
+                              robotHistoryPathMsg_.poses[i-1].pose.position.y));
+            
+            if(diffLocationsM < 0.05){
+              continue;
+            }
+          }  
+        
           if (canRotateInPlace){           
 
             // set orienation to this goal (rotate 180)
@@ -615,7 +627,9 @@ public:
       
         // if we didnt found reverse goal the robot will navigate with reverse to
         // the starting location
-        if (!foundReverseGoal ){
+        if (!foundReverseGoal ) {
+
+          cerr<<" didnt found safe goal to rotate, going back in reverse to starting location "<<endl;
 
           setReverse(); 
 
@@ -3261,16 +3275,25 @@ private:
 
   void setReverse(){  
 
+    cerr<<" before set reverse "<<endl;
     std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x -0.1");
+    cerr<<" before sleep "<<endl;
     ros::Duration(1).sleep();
+    cerr<<" after sleep "<<endl;
 
     reversAllowed_ = true;
   } 
 
   void disableReverse(){  
 
+    cerr<<" before disable reverse "<<endl;
+
     std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x 0.0");
+    cerr<<" before sleep "<<endl;
+
     ros::Duration(1).sleep();
+    cerr<<" after sleep "<<endl;
+
 
     reversAllowed_ = false;
 
