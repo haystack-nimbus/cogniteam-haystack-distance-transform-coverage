@@ -3329,7 +3329,7 @@ private:
       cerr<<"errrrrrrrrrrrrrrrrrrrrr "<<endl;
     }
     
-    ros::Duration(2).sleep();
+    ros::Duration(1).sleep();
 
     reversAllowed_ = true;
   } 
@@ -3358,7 +3358,7 @@ private:
       cerr<<"errrrrrrrrrrrrrrrrrrrrr "<<endl;
     }
     
-    ros::Duration(2).sleep();
+    ros::Duration(1).sleep();
 
 
     reversAllowed_ = false;
