@@ -92,6 +92,10 @@
 #include <stdlib.h>
 #include <ctime>
 
+#include <dynamic_reconfigure/DoubleParameter.h>
+#include <dynamic_reconfigure/Reconfigure.h>
+#include <dynamic_reconfigure/Config.h>
+
 
 using namespace cv;
 using namespace std::chrono;
@@ -111,7 +115,8 @@ enum GoalState
   UN_COVERED = 0,
   COVERED = 1,
   COVERED_BY_ROBOT_PATH = 2,
-  COVERED_BY_OBSTACLE = 3
+  COVERED_BY_OBSTACLE = 3,
+  ABORTED = 4
 };
 
 struct Path_with_Status
@@ -213,6 +218,7 @@ public:
       cerr << " map-coverage is now connecting with move-base !! " << endl;
 
       disableReverse();
+
     }
 
     // rosparam
@@ -312,7 +318,7 @@ public:
 
       if (!initSlamMap_ || !initGlobalCostMap_)
       {
-        cerr << "map not recieved !!" << endl;
+        // << "map not recieved !!" << endl;
 
         continue;
       }
@@ -402,6 +408,7 @@ public:
           bool result = sendGoal(nextFrontierGoal, -1, true);
 
           if( !result){
+            cerr<<" failed to reach exploration goal "<<endl;
             unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
           } 
 
@@ -414,18 +421,21 @@ public:
               bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 
                 0, 0.2);
 
-              if ( !canRotateInPlace ){
-
-                smallReverseAllowed_ = true;
+              if ( !canRotateInPlace ){                
                 
+                cerr<<" CAN'T ROTATE TO THE TARGET !! "<<endl;
+                
+                smallReverseAllowed_ = true;
 
-                smallReverseAllowed_ = false;
+                makeSmallReverse();
+
+                smallReverseAllowed_ = false;               
+
               }  
             }         
 
 
           }
-
 
           cerr << "move_base result for NAV_TO_NEXT_FRONTIER " << result << endl;
 
@@ -959,9 +969,7 @@ public:
               // found goal with connected component !!
               if (foundGoalByConnectedComponents)
               {
-                cerr << " found goal by connected component !!" << endl;
-
-               
+                cerr << " found goal by connected component !!" << endl;               
 
                 /// send the goal !!
                 geometry_msgs::Quaternion q;
@@ -996,7 +1004,7 @@ public:
                 //goal of connected component failed, marks this area as obstacle in algo map
                 if(!result) {
 
-                    markedGoalsOnMap.push_back(finalGoalToNavigate);
+                    markedGoalsOnMap.push_back(finalGoalToNavigate);                   
 
                 }
 
@@ -1345,8 +1353,16 @@ private:
   {
     // cerr << direc << endl;
 
-    cv::Mat dbg = imgMap.clone();
-    cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+    cv::Mat workMap = imgMap.clone();
+    int dilationPix =  3; 
+    cv::Mat binary = workMap.clone();
+    binary.setTo(0, workMap != 0);
+    binary.setTo(255, workMap == 0);
+    dilate(binary, binary, Mat(), Point(-1, -1), dilationPix, 1, 1);
+    workMap.setTo(0, binary == 255);
+
+
+    // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
     float robot_W_pix = robot_w_m / mapResolution_;
 
@@ -1397,7 +1413,7 @@ private:
 
       cv::Point2d rightSide(refPoint2.x + (size)*cos(rotattionAngle), refPoint2.y + (size)*sin(rotattionAngle));
 
-      if (leftSide.x < 0 || leftSide.x > imgMap.cols || leftSide.y < 0 || leftSide.y > imgMap.rows)
+      if (leftSide.x < 0 || leftSide.x > workMap.cols || leftSide.y < 0 || leftSide.y > workMap.rows)
       {
         break;
       }
@@ -1405,7 +1421,7 @@ private:
       // contour represent the area of searching uncovered goals
       vector<cv::Point> contour{ refPoint1, refPoint2, rightSide, leftSide };
 
-      cv::polylines(dbg, contour, true, Scalar(255, 0, 0), 1);
+      // cv::polylines(dbg, contour, true, Scalar(255, 0, 0), 1);
 
       middle = cv::Point2d((leftSide.x + rightSide.x) / 2, (leftSide.y + rightSide.y) / 2);
 
@@ -1414,16 +1430,20 @@ private:
       float distFromRobot = goalCalculator.distanceCalculate(middle, robotPix);
 
       // we finsih this direction (obstacle or max dist)
-      if (imgMap.at<uchar>(leftSide.y, leftSide.x) != 254 || 
-          imgMap.at<uchar>(rightSide.y, rightSide.x) != 254 ||
+      if (workMap.at<uchar>(leftSide.y, leftSide.x) != 254 || 
+          workMap.at<uchar>(rightSide.y, rightSide.x) != 254 ||
           distFromRobot > (maxDistanceM / mapResolution_))
       {
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
         {
           // IF this is uncovered goal and inside the polygon
-          if (path_poses_with_status_.status_[i] == UN_COVERED)
-          {
-            if (pointPolygonTest(contour, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), false) > 0)
+          
+          if (path_poses_with_status_.status_[i] == UN_COVERED )
+          { 
+
+           
+            if (
+              pointPolygonTest(contour, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), false) > 0)
             {
               unCovered++;
               float distFromMiddle = goalCalculator.distanceCalculate(
@@ -2178,7 +2198,7 @@ private:
 
     float maxScore = 0.0;
     float index = -1;
-    int score_threshold = 0;
+    int score_threshold = 2;
 
     for (int i = 0; i < goals.size(); i++)
     {
@@ -3285,29 +3305,68 @@ private:
     }
   }
 
-  void setReverse(){  
+  void setReverse(){ 
 
-    cerr<<" before set reverse "<<endl;
-    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x -0.1");
-    cerr<<" before sleep "<<endl;
-    ros::Duration(1).sleep();
-    cerr<<" after sleep "<<endl;
+
+    dynamic_reconfigure::ReconfigureRequest srv_req;
+    dynamic_reconfigure::ReconfigureResponse srv_resp;
+    dynamic_reconfigure::DoubleParameter float_param;
+    dynamic_reconfigure::Config conf;
+
+    float_param.name = "min_vel_x";
+    float_param.value = -0.1;
+    conf.doubles.push_back(float_param);
+   
+
+    srv_req.config = conf;
+    if(ros::service::call("/move_base/DWAPlannerROS/set_parameters", srv_req, srv_resp)){
+      
+      cerr<<" after disable reverse "<<endl;
+
+
+    } else {
+
+      cerr<<"errrrrrrrrrrrrrrrrrrrrr "<<endl;
+    }
+    
+    ros::Duration(2).sleep();
 
     reversAllowed_ = true;
   } 
 
   void disableReverse(){  
 
-    cerr<<" before disable reverse "<<endl;
+     dynamic_reconfigure::ReconfigureRequest srv_req;
+    dynamic_reconfigure::ReconfigureResponse srv_resp;
+    dynamic_reconfigure::DoubleParameter float_param;
+    dynamic_reconfigure::Config conf;
 
-    std::system("rosrun dynamic_reconfigure dynparam set /move_base/DWAPlannerROS min_vel_x 0.0");
-    cerr<<" before sleep "<<endl;
+    float_param.name = "min_vel_x";
+    float_param.value = 0.0;
+    conf.doubles.push_back(float_param);
 
-    ros::Duration(1).sleep();
-    cerr<<" after sleep "<<endl;
+   
+
+    srv_req.config = conf;
+    if(ros::service::call("/move_base/DWAPlannerROS/set_parameters", srv_req, srv_resp)){
+      
+      cerr<<" after disable reverse "<<endl;
+
+
+    } else {
+
+      cerr<<"errrrrrrrrrrrrrrrrrrrrr "<<endl;
+    }
+    
+    ros::Duration(2).sleep();
 
 
     reversAllowed_ = false;
+
+    
+
+
+
 
 
   }
