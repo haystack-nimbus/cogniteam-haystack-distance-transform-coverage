@@ -2615,7 +2615,7 @@ private:
       m.pose.position.z = 0;
       m.pose.orientation.x = 0;
       m.pose.orientation.y = 0;
-      m.pose.orientation.z = 0;
+      m.pose.orientation.z = -0.5;
       m.pose.orientation.w = 1.0;
       m.scale.x = 0.1;
       m.scale.y = 0.1;
