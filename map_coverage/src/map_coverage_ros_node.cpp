@@ -539,25 +539,35 @@ public:
         /// find on the last forward path goal that the robot can rotate
 
         bool foundReverseGoal = false;
+        if( robotHistoryPathMsg_.poses.size() == 0){
+          return false;
+        }
+        geometry_msgs::PoseStamped prevLocation = 
+          robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size() -1];
         for (int i = robotHistoryPathMsg_.poses.size() -1 ; i > 0; i--) {
+          
+          // for not to do extra work not calculate for same locations !!
+          if ( i != robotHistoryPathMsg_.poses.size() -1 && (i - 1) > 0){
+            
+            float diffLocationsM =
+              goalCalculator.distanceCalculate(cv::Point2d(robotHistoryPathMsg_.poses[i].pose.position.x,
+                             robotHistoryPathMsg_.poses[i].pose.position.y),
+                            cv::Point2d(prevLocation.pose.position.x, 
+                              prevLocation.pose.position.y));
+            
+            if(diffLocationsM < 0.05){
+              continue;
+            } 
+          } 
+
+          prevLocation = robotHistoryPathMsg_.poses[i];
 
           bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotHistoryPathMsg_.poses[i],
              robot_w_m_, robot_h_m_, 
             0, 0.2);
 
-          if( i != robotHistoryPathMsg_.poses.size() -1 && (i - 1) > 0){
-            
-            float diffLocationsM =
-              goalCalculator.distanceCalculate(cv::Point2d(robotHistoryPathMsg_.poses[i].pose.position.x,
-                             robotHistoryPathMsg_.poses[i].pose.position.y),
-                            cv::Point2d(robotHistoryPathMsg_.poses[i-1].pose.position.x, 
-                              robotHistoryPathMsg_.poses[i-1].pose.position.y));
-            
-            if(diffLocationsM < 0.05){
-              continue;
-            }
-          }  
-        
+           
+
           if (canRotateInPlace){           
 
             // set orienation to this goal (rotate 180)
@@ -898,8 +908,9 @@ public:
             }
 
             currentAlgoMap_ = getCurrentMap();
-
             updateRobotLocation();
+
+            addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_, convertPoseToPix(robotPose_));     
 
             // marked waypoints near marked uncreacble goals
             for (int i = 0; i < markedGoalsOnMap.size(); i++)
@@ -1403,7 +1414,8 @@ private:
       float distFromRobot = goalCalculator.distanceCalculate(middle, robotPix);
 
       // we finsih this direction (obstacle or max dist)
-      if (imgMap.at<uchar>(leftSide.y, leftSide.x) != 254 || imgMap.at<uchar>(rightSide.y, rightSide.x) != 254 ||
+      if (imgMap.at<uchar>(leftSide.y, leftSide.x) != 254 || 
+          imgMap.at<uchar>(rightSide.y, rightSide.x) != 254 ||
           distFromRobot > (maxDistanceM / mapResolution_))
       {
         for (int i = 0; i < path_poses_with_status_.coveragePathPoses_.size(); i++)
