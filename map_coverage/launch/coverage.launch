@@ -17,7 +17,12 @@
     <arg name="base_frame" default="base_footprint" />  
     <arg name="global_frame" default="map" />  
 
-    <arg name="reducing_goals" default="false" />  
+    <arg name="reducing_goals" default="false" /> 
+
+    <arg name="show_live_video" default="false" /> 
+
+
+     
         
     <node name="map_coverage_node" pkg="map_coverage" 
             type="map_coverage_node">   
@@ -38,6 +43,8 @@
         
         
         <param name="reducing_goals" value="$(arg reducing_goals)" /> 
+
+        <param name="show_live_video" value="$(arg show_live_video)" />        
 
        
     </node>
