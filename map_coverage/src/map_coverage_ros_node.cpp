@@ -260,7 +260,7 @@ public:
     image_transport::ImageTransport it(node_);
 
     liveMapPub_ = it.advertise("/live_map", 1);
-    node_.param("/live_map/compressed/jpeg_quality", 20);
+    node_.param("htjpeg_quality", 20);
 
     reverse_cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>("/cmd_vel", 1, false);
 
@@ -695,7 +695,7 @@ public:
 
             cerr << "send the reverse goal !!!!!" << endl;
             // seng goal backward direction
-            bool result = sendGoal(reverseGoal, -1);
+            bool result = sendGoal(reverseGoal, -1, false, false, true);
 
             if (result)
             {
@@ -1023,7 +1023,7 @@ public:
 
     
     cerr<<" send the "<<mForward<<" meter goal "<<endl;
-    bool result = sendGoal(one_meter_goal, -1);
+    bool result = sendGoal(one_meter_goal, -1, false, true);
 
     if (!result){
 
@@ -1033,7 +1033,7 @@ public:
         cv::Point2d(one_meter_goal.pose.position.x, one_meter_goal.pose.position.y));
       
       cerr<<" the dist to "<<mForward<<" meter goal  "<<dist_from_1_meter_goal<<endl;
-      if ( !(dist_from_1_meter_goal < 0.2)) {
+      if ( !(dist_from_1_meter_goal < 0.25)) {
         
         cerr<<" failed to reach "<<mForward<<" meter goal , too far "<<endl;
         return false;
@@ -1096,21 +1096,53 @@ public:
           binary.setTo(255, initalizationMap >= 254);
           binary.setTo(0, binary != 255);
           cv::distanceTransform(binary, dist, DIST_L2, 3);
-          // Normalize the distance image for range = {0.0, 1.0}
-          // so we can visualize and threshold it
-          normalize(dist, dist, 0, 1.0, NORM_MINMAX);
 
-          double min, max;
-          cv::Point minLoc;
-          cv::Point SafestGoalPix;
-          minMaxLoc(dist, &min, &max, &minLoc, &SafestGoalPix);
+          float distThreshM = robot_w_m_ ;
+          float minDist = 99999;
+          cv::Point2d SafestGoalPix;
+          bool foundSafest  = false;
 
-          if (!(SafestGoalPix.x > 0 && SafestGoalPix.y > 0))
+          cerr<<" distThreshM "<<distThreshM<<endl;
+          Mat distGray;
+          normalize(dist, distGray, 0, 1.0, NORM_MINMAX);
+
+          // find the safe goal next to robot aand also the closest one
+
+          for (int j = 0; j < binary.rows; j++)
           {
-            cerr << " failed to find safe goal";
+            for (int i = 0; i < binary.cols; i++)
+            {
+              if (binary.at<uchar>(j, i) != 255)
+              {
+                continue;
+              }
+
+              float distM = dist.at<float>(j, i) * mapResolution_;
+  
+              if ( distM > distThreshM){
+                geometry_msgs::Quaternion q;
+                auto poseT = convertPixToPose(cv::Point2d(i ,j),q);
+
+                float dist = 
+                  goalCalculator.distanceCalculate(cv::Point2d(poseT.pose.position.x, poseT.pose.position.y),
+                  cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
+                
+                if ( dist < minDist){
+                  
+                  foundSafest = true;
+                  minDist = dist;
+                  SafestGoalPix = cv::Point2d(i ,j);
+                }
+              }
+            }
+          }
+
+          if( !foundSafest){
+
             return false;
           }
 
+        
           cerr<<" found other safe goal, send goal there "<<endl;
 
           // create goal (pose )
@@ -1141,13 +1173,15 @@ public:
           backward_goal_marker_pub_.publish(marker);
 
 
-          bool result = sendGoal(nextGoal, -1);
+          bool result = sendGoal(nextGoal, -1, false, true);
+
+          updateRobotLocation();
 
           if (!result){              
 
             float dist = 
-            goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
-            cv::Point2d(nextGoal.pose.position.x, nextGoal.pose.position.y));
+              goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+              cv::Point2d(nextGoal.pose.position.x, nextGoal.pose.position.y));
             
             cerr<<" the dist to safe goal "<<dist<<endl;
             if ( !(dist < 0.3)){
@@ -3201,7 +3235,10 @@ private:
     return "";
   }
 
-  bool sendGoal(const geometry_msgs::PoseStamped& goalMsg, int goalIndex = -1, bool in_explore = false)
+  bool sendGoal(const geometry_msgs::PoseStamped& goalMsg, int goalIndex = -1, 
+    bool in_explore = false, 
+    bool in_initialization = false,
+    bool in_reverse = false)
   {
     // navigate to the point
     moveBaseController_.navigate(goalMsg);
@@ -3244,6 +3281,34 @@ private:
         if (distDromRobot < 0.35)
         {
           cerr << " cancel the goal !! " << endl;
+          moveBaseController_.moveBaseClient_.cancelGoal();
+          return true;
+        }
+      }
+
+      if (in_initialization)
+      {
+        float distDromRobot =
+            goalCalculator.distanceCalculate(cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y),
+                                             cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
+
+        if (distDromRobot < 0.1)
+        {
+          cerr << "in_initialization  cancel the goal !! " << endl;
+          moveBaseController_.moveBaseClient_.cancelGoal();
+          return true;
+        }
+      }
+
+      if (in_reverse)
+      {
+        float distDromRobot =
+            goalCalculator.distanceCalculate(cv::Point2d(goalMsg.pose.position.x, goalMsg.pose.position.y),
+                                             cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
+
+        if (distDromRobot < 0.1)
+        {
+          cerr << "in_reverse  cancel the goal !! " << endl;
           moveBaseController_.moveBaseClient_.cancelGoal();
           return true;
         }
@@ -3597,6 +3662,8 @@ private:
     int iteration = 0;
 
     float prevAngle = 0.0;
+
+    cerr<<" start to rotate "<<numOfRounds<<" rounds "<<endl;
 
     while (ros::ok())
     {

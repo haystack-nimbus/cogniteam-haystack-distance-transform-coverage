@@ -2,8 +2,8 @@
 
     <arg name="distance_between_goals_m" default="0.1" />  
     <arg name="walls_inflation_m" default="0.3" />  
-    <arg name="robot_w_m" default="0.6" />  
-    <arg name="robot_h_m" default="0.6" />  
+    <arg name="robot_w_m" default="0.55" />  
+    <arg name="robot_h_m" default="0.55" />  
 
     <arg name="sanitization_radius" default="0.5" />  
 
@@ -19,10 +19,7 @@
 
     <arg name="reducing_goals" default="false" /> 
 
-    <arg name="show_live_video" default="false" /> 
-
-
-     
+    <arg name="show_live_video" default="false" />      
         
     <node name="map_coverage_node" pkg="map_coverage" 
             type="map_coverage_node">   
