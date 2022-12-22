@@ -39,6 +39,8 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/Odometry.h>
+
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 #include <angles/angles.h>
@@ -251,6 +253,9 @@ public:
 
     camera_scan_sub_ = node_.subscribe<sensor_msgs::LaserScan>("/ttt", 1,
                                                                &MapCoverageManager::cameraScanCallback, this);
+
+    odom_sub_ = node_.subscribe<nav_msgs::Odometry>("/odom", 1,
+                                &MapCoverageManager::odomCallback, this);                                                           
 
     is_person_detected_sub_ =
         node_.subscribe<std_msgs::Bool>("/is_person_detected", 1, &MapCoverageManager::personsCallback, this);
@@ -2073,6 +2078,14 @@ private:
    
   }
 
+  void odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
+
+    currOdom_.child_frame_id = msg->child_frame_id;
+    currOdom_.header = msg->header;
+    currOdom_.pose = msg->pose;
+    currOdom_.twist = msg->twist;
+
+  }
   void cameraScanCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   { 
 
@@ -3691,11 +3704,20 @@ private:
     {
       updateRobotLocation();
 
-      float currDeg =
-          angles::to_degrees(atan2((2.0 * (robotPose_.pose.orientation.w * robotPose_.pose.orientation.z +
-                                           robotPose_.pose.orientation.x * robotPose_.pose.orientation.y)),
-                                   (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
-                                                 robotPose_.pose.orientation.z * robotPose_.pose.orientation.z))));
+      // float currDeg =
+      //     angles::to_degrees(atan2((2.0 * (robotPose_.pose.orientation.w * robotPose_.pose.orientation.z +
+      //                                      robotPose_.pose.orientation.x * robotPose_.pose.orientation.y)),
+      //                              (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
+      //                                            robotPose_.pose.orientation.z * robotPose_.pose.orientation.z))));
+      
+       float currDeg =
+          angles::to_degrees(atan2((2.0 * (currOdom_.pose.pose.orientation.w * currOdom_.pose.pose.orientation.z +
+                                           currOdom_.pose.pose.orientation.x * currOdom_.pose.pose.orientation.y)),
+                                   (1.0 - 2.0 * (currOdom_.pose.pose.orientation.y * currOdom_.pose.pose.orientation.y +
+                                    currOdom_.pose.pose.orientation.z * currOdom_.pose.pose.orientation.z))));
+      
+       
+      
       // init
       if (iteration == 0)
       {
@@ -3797,6 +3819,8 @@ private:
 
   ros::Subscriber camera_scan_sub_;
 
+  ros::Subscriber odom_sub_;
+
   ros::Subscriber is_person_detected_sub_;
 
   // pubs
@@ -3850,6 +3874,8 @@ private:
   // params
 
   geometry_msgs::PoseStamped robotPose_;
+
+  nav_msgs::Odometry currOdom_;
 
   geometry_msgs::PoseStamped robotStartLocation_;
 
