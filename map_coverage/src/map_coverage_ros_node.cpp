@@ -531,8 +531,10 @@ public:
                                   robotPix.y + (distBackwaredM / mapResolution_) * sin(robotHeading));
 
       if ( backwardPixLocation.x < 0 || backwardPixLocation.y < 0 ||
-        backwardPixLocation.x > safetyMap.cols || backwardPixLocation.y> safetyMap.rows){
+          backwardPixLocation.x > safetyMap.cols || backwardPixLocation.y> safetyMap.rows){
+          
 
+          cerr<<" bad  backwardPixLocation "<<endl;
           return;
       }
        // check if the backwardPixLocation is blocked !!
@@ -570,7 +572,12 @@ public:
       reverse_cmd_vel_pub_.publish(velocity);
       rate.sleep();
 
-      updateRobotLocation();
+      if(!updateRobotLocation()){
+        
+        cerr<<" failed update rbot location "<<endl;
+        return;
+      }
+
       auto end = ros::WallTime::now();
 
       auto duration = (end - startTime).toSec();
@@ -581,6 +588,8 @@ public:
 
       ros::spinOnce();
     }
+
+     cerr << " FINISHED SMALL REVERSE " << endl;
   }
   bool reverseLogic(const nav_msgs::Path& wanted_path, const geometry_msgs::PoseStamped& wantedGoal)
   {
@@ -1513,6 +1522,9 @@ public:
                   smallReverseAllowed_ = false;
                 }
               }
+            } else {
+
+              cerr<<" resMakePlan "<<resMakePlan<<" result "<<result<<endl; 
             }
 
             path_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, COVERED);
