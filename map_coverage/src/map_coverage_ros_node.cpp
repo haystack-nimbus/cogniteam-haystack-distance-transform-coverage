@@ -1419,11 +1419,12 @@ public:
                   }
                 }
 
-                bool result = sendGoal(nextGoal, -1);
+                bool result = sendGoal(nextGoal, -1, true);
 
                 // goal of connected component failed, marks this area as obstacle in algo map
                 if (!result)
-                {
+                { 
+                  cerr<<" failed to send goal connectecd compoennet "<<endl;
                   markedGoalsOnMap.push_back(finalGoalToNavigate);
                 }
 
@@ -1446,6 +1447,8 @@ public:
                       smallReverseAllowed_ = false;
                     }
                   }
+                } else {
+                  cerr<<"1111111111111111111111 "<<endl;
                 }
 
                 continue;
