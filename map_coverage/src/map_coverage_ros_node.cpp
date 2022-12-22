@@ -1334,6 +1334,7 @@ public:
 
             if (exit_)
             { 
+              cerr<<"exit "<<endl;
               setState("USER_CTRL_C");
               saveCoverageImg();
               return;
@@ -1345,7 +1346,10 @@ public:
               
               setState("PERSON_DETECTED");
 
+              cerr<<" turnOffLamp detectedPerson_ "<<endl;
+
               return;
+
             } else {
 
               turnOnLamp();
@@ -1353,6 +1357,8 @@ public:
 
             currentAlgoMap_ = getCurrentMap();
             updateRobotLocation();
+
+            cerr<<"0000000000000 "<<endl;
 
             addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_, convertPoseToPix(robotPose_));
 
@@ -1460,6 +1466,8 @@ public:
                   cerr<<"1111111111111111111111 "<<endl;
                 }
 
+                cerr<<"222222222222 "<<endl;
+
                 continue;
               }
               else
@@ -1527,6 +1535,7 @@ public:
               cerr<<" resMakePlan "<<resMakePlan<<" result "<<result<<endl; 
             }
 
+            cerr<<" 33333333333333333333 "<<endl;
             path_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, COVERED);
 
             iteration++;
