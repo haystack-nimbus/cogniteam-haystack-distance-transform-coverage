@@ -962,6 +962,7 @@ public:
     if( detectedPerson_)
     {
 
+
       turnOffLamp();
       
       setState("PERSON_DETECTED");
@@ -2096,6 +2097,8 @@ private:
     if (msg->data == true)
     {
       detectedPerson_ = true;
+
+      moveBaseController_.moveBaseClient_.cancelAllGoals();
 
       turnOffLamp();
     } 
