@@ -249,7 +249,7 @@ public:
     global_cost_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
                                                                     &MapCoverageManager::globalCostMapCallback, this);
 
-    camera_scan_sub_ = node_.subscribe<sensor_msgs::LaserScan>("/scan_from_shallow_cloud", 1,
+    camera_scan_sub_ = node_.subscribe<sensor_msgs::LaserScan>("/ttt", 1,
                                                                &MapCoverageManager::cameraScanCallback, this);
 
     is_person_detected_sub_ =
@@ -2127,71 +2127,92 @@ private:
   }
 
   bool getSafetyMap(Mat& saftetyMap)
-  {
+  { 
+   
+    auto robotBaseFootPrint = convertPoseToPix(robotPose_);
+
+    if (!costMapImg_.data || robotBaseFootPrint.x < 0 || robotBaseFootPrint.y < 0 
+      || !currentGlobalMap_.data || !initSlamMap_)
+    {
+      cerr << " failed to get safey map " << endl;
+      return false;
+    }
+
+    Mat globalCostMap = costMapImg_.clone();
+    saftetyMap = cv::Mat(currentGlobalMap_.rows, currentGlobalMap_.cols, CV_8UC1, cv::Scalar(205));
+
+    cv::Point2d mapCenter(currentGlobalMap_.cols / 2, currentGlobalMap_.rows / 2);
+    cv::Point2d costMapCenter(globalCostMap.cols / 2, globalCostMap.rows / 2);
+   
+    int deltaRobotX = mapCenter.x - robotBaseFootPrint.x;
+    int deltaRobotY = mapCenter.y - robotBaseFootPrint.y;
+
     try
     {
-      
-
-      if (initSlamMap_ && initGlobalCostMap_ && mappingMap_.data && currentGlobalMap_.data)
+      for (int y = 0; y < globalCostMap.rows; y++)
       {
-        saftetyMap = cv::Mat(currentGlobalMap_.rows, currentGlobalMap_.cols, CV_8UC1, cv::Scalar(205));
-
-        // // robot trace
-        for (int i = 0; i < robotHistoryPathMsg_.poses.size(); i++)
+        for (int x = 0; x < globalCostMap.cols; x++)
         {
-          circle(saftetyMap, convertPoseToPix(robotHistoryPathMsg_.poses[i]), ((robot_w_m_ / 2) / mapResolution_),
-                 Scalar(255), -1, 8, 0);
+          int value = globalCostMap.at<uchar>(y, x);
+
+          if (value == 255) // not infalted
+          {
+            cv::Point2d nP(x + (mapCenter.x - costMapCenter.x) - deltaRobotX,
+                           y + (mapCenter.y - costMapCenter.y) - deltaRobotY);
+
+            if (nP.x > 0 && nP.y > 0 && nP.x < saftetyMap.cols && nP.y < saftetyMap.rows)
+            {
+              saftetyMap.at<uchar>(nP.y, nP.x) = 0;
+            }
+          }
         }
-
-        // put all camera obstacles on safety map
-        for(int i = 0; i < cameraScanObstacles.size(); i++){
-
-          geometry_msgs::PoseStamped p;
-          p.pose.position.x = cameraScanObstacles[i].point.x;
-          p.pose.position.y = cameraScanObstacles[i].point.y;
-          saftetyMap.at<uchar>(cv::Point(convertPoseToPix(p))) = 0;
-
-        }
-
-        // for (auto it = camera_laser_beams_.begin(); it != camera_laser_beams_.end(); ++it)
-        // {
-        //   string robot_location_camera_beam = it->first;
-
-        //   vector<string> result;
-        //   boost::split(result, robot_location_camera_beam, boost::is_any_of("_"));  // robotx_roboty_beamx_beamy
-        //   geometry_msgs::PoseStamped robotPose;
-        //   robotPose.pose.position.x = atof(result[0].c_str());
-        //   robotPose.pose.position.y = atof(result[1].c_str());
-
-        //   geometry_msgs::PoseStamped cameraBeam;
-        //   cameraBeam.pose.position.x = atof(result[2].c_str());
-        //   cameraBeam.pose.position.y = atof(result[3].c_str());
-
-        //   cv::line(saftetyMap, convertPoseToPix(robotPose), convertPoseToPix(cameraBeam), Scalar(255), 1);
-
-        //   saftetyMap.at<uchar>(cv::Point(convertPoseToPix(cameraBeam))) = 0;
-        //   circle(saftetyMap, convertPoseToPix(cameraBeam), 1, Scalar(0), -1, 8, 0);
-        // }
-
-
-        saftetyMap.setTo(0, mappingMap_ == 0);
-
-        return true;
-      } 
-      else {
-
-        cerr<<" initSlamMap_ "<<initSlamMap_<<" initGlobalCostMap_ "<<initGlobalCostMap_<<
-          " mappingMap_.data "<<mappingMap_.data<<" currentGlobalMap_.data "<<currentGlobalMap_.data<<endl;
-        return false;  
       }
+
+      // imwrite("/home/yakir/distance_transform_coverage_ws/saftetyMap.png", saftetyMap);
+
+
+      return true;
     }
     catch (cv::Exception& e)
     {
       const char* err_msg = e.what();
       std::cerr << "exception caught: " << err_msg << std::endl;
-
       return false;
     }
+
+    // try
+    // {
+      
+
+    //   if (initSlamMap_ && initGlobalCostMap_ && mappingMap_.data && currentGlobalMap_.data)
+    //   {
+    //     saftetyMap = cv::Mat(currentGlobalMap_.rows, currentGlobalMap_.cols, CV_8UC1, cv::Scalar(205));
+
+
+        
+
+        
+
+       
+
+
+
+    //     return true;
+    //   } 
+    //   else {
+
+    //     cerr<<" initSlamMap_ "<<initSlamMap_<<" initGlobalCostMap_ "<<initGlobalCostMap_<<
+    //       " mappingMap_.data "<<mappingMap_.data<<" currentGlobalMap_.data "<<currentGlobalMap_.data<<endl;
+    //     return false;  
+    //   }
+    // }
+    // catch (cv::Exception& e)
+    // {
+    //   const char* err_msg = e.what();
+    //   std::cerr << "exception caught: " << err_msg << std::endl;
+
+    //   return false;
+    // }
   }
 
   string prd(const double x, const int decDigits)
@@ -2591,14 +2612,15 @@ private:
 
           if (value == 100)
           {
-            costMapImg_.at<uchar>(j, i) = 255;
+            costMapImg_.at<uchar>(j, i) = 255; ///
           }
           else if (value > 0 && value < 100)
           {
-            costMapImg_.at<uchar>(j, i) = 100;
+            costMapImg_.at<uchar>(j, i) = 100; // inflation
           }
         }
       }
+
 
       initGlobalCostMap_ = true;
 
