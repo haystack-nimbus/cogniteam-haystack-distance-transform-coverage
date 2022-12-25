@@ -1635,11 +1635,25 @@ private:
 
   void updateTimerCallback(const ros::TimerEvent&) {
 
+
+    //if coverage done
+
+    if (coverage_state_ == COVERAGE_DONE) {
+
+      turnOffLamp();
+
+      return;
+    }
+
+    // if we are still in  INITIALIZATION, do nothing
+
     if( (state_ ==  "INITIALIZATION" || state_ == "IDLE") ) {
 
       return;
     }
 
+    // in coverage/ exploration  
+    
     if( detectedPerson_ ) {
 
       cerr<<" PERSON_DETECTED "<<endl;
