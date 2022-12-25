@@ -263,7 +263,7 @@ public:
 
     // timer 
 
-    lampTimer_ = node_.createTimer(ros::Rate(5), 
+    lampTimer_ = node_.createTimer(ros::Rate(10), 
                 &MapCoverageManager::updateTimerCallback, this);
     // pubs
 
@@ -1653,7 +1653,7 @@ private:
     }
 
     // in coverage/ exploration  
-    
+
     if( detectedPerson_ ) {
 
       cerr<<" PERSON_DETECTED "<<endl;
@@ -3587,7 +3587,7 @@ private:
 
       cv::imwrite(full_img_name, robotTreaceImg);
       //save to OneDrive
-      cv::imwrite("~/OneDrive/" + image_name_format + ".png", robotTreaceImg);
+      cv::imwrite("/root/OneDrive/" + image_name_format + ".png", robotTreaceImg);
 
       // cv::imwrite(coverage_img_path_ + "patthern.png", patternImg);
 
