@@ -3599,6 +3599,9 @@ private:
       cerr << "full_img_name: " << full_img_name << endl;
 
       cv::imwrite(full_img_name, robotTreaceImg);
+      //save to OneDrive
+      cv::imwrite("/home/haystack/OneDrive/" + image_name_format + ".png", robotTreaceImg);
+
       // cv::imwrite(coverage_img_path_ + "patthern.png", patternImg);
 
       imgSaved_ = true;
