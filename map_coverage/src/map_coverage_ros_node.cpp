@@ -260,6 +260,11 @@ public:
     is_person_detected_sub_ =
         node_.subscribe<std_msgs::Bool>("/is_person_detected", 1, &MapCoverageManager::personsCallback, this);
 
+
+    // timer 
+
+    lampTimer_ = node_.createTimer(ros::Rate(5), 
+                &MapCoverageManager::updateTimerCallback, this);
     // pubs
 
     image_transport::ImageTransport it(node_);
@@ -323,6 +328,7 @@ public:
     state_ = state;
   }
 
+
   bool explore()
   {
     string m = "";
@@ -339,18 +345,7 @@ public:
         return false;
       }
 
-      if( detectedPerson_){
-
-        turnOffLamp();
-        
-        setState("PERSON_DETECTED");
-
-        return false;
-
-      } else {
-
-        turnOnLamp();
-      }
+     
 
       if (!initSlamMap_ || !initGlobalCostMap_)
       {
@@ -961,8 +956,6 @@ public:
 
     if( detectedPerson_)
     {
-
-
       turnOffLamp();
       
       setState("PERSON_DETECTED");
@@ -1341,20 +1334,7 @@ public:
               return;
             }
 
-            if ( detectedPerson_){
-
-              turnOffLamp();
-              
-              setState("PERSON_DETECTED");
-
-              cerr<<" turnOffLamp detectedPerson_ "<<endl;
-
-              return;
-
-            } else {
-
-              turnOnLamp();
-            }
+            
 
             currentAlgoMap_ = getCurrentMap();
             updateRobotLocation();
@@ -1607,20 +1587,7 @@ public:
           { 
             setState("USER_CTRL_C");
             return;
-          }
-
-          if ( detectedPerson_){
-
-            turnOffLamp();
-            
-            setState("PERSON_DETECTED");
-
-            return;
-          } else {
-
-            turnOnLamp();
-          }
-
+          }         
           
 
           break;
@@ -1643,17 +1610,7 @@ public:
             return;
           }
 
-          if ( detectedPerson_){
-
-            turnOffLamp();
-            
-            setState("PERSON_DETECTED");
-
-            return;
-          } else {
-
-            turnOnLamp();
-          }
+         
 
           break;
         }
@@ -1675,6 +1632,34 @@ public:
   }
 
 private:
+
+  void updateTimerCallback(const ros::TimerEvent&) {
+
+    if( (state_ ==  "INITIALIZATION" || state_ == "IDLE") ) {
+
+      return;
+    }
+
+    if( detectedPerson_ ) {
+
+      cerr<<" PERSON_DETECTED "<<endl;
+
+      setState("PERSON_DETECTED");
+
+      moveBaseController_.moveBaseClient_.cancelAllGoals();
+
+      turnOffLamp();
+
+      exit_ = true;
+    } 
+
+    else {
+
+      turnOnLamp();
+    }
+    
+
+  }
   void clearAllCostMaps()
   {
     cerr << " clearAllCostMaps " << endl;
@@ -2096,11 +2081,7 @@ private:
   {
     if (msg->data == true)
     {
-      detectedPerson_ = true;
-
-      moveBaseController_.moveBaseClient_.cancelAllGoals();
-
-      turnOffLamp();
+      detectedPerson_ = true;      
     } 
    
   }
@@ -3382,15 +3363,7 @@ private:
         return true;
       }
 
-      if ( detectedPerson_){
-
-        turnOffLamp();
-        
-        setState("PERSON_DETECTED");
-
-        return false;
-      }
-
+      
       moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
       auto move_base_state = moveBaseController_.moveBaseClient_.getState();
 
@@ -3600,7 +3573,7 @@ private:
 
       cv::imwrite(full_img_name, robotTreaceImg);
       //save to OneDrive
-      cv::imwrite("/home/haystack/OneDrive/" + image_name_format + ".png", robotTreaceImg);
+      cv::imwrite("~/OneDrive/" + image_name_format + ".png", robotTreaceImg);
 
       // cv::imwrite(coverage_img_path_ + "patthern.png", patternImg);
 
@@ -3852,6 +3825,10 @@ private:
   ros::Subscriber odom_sub_;
 
   ros::Subscriber is_person_detected_sub_;
+
+  //timer 
+
+  ros::Timer lampTimer_;
 
   // pubs
 
