@@ -682,7 +682,7 @@ public:
             marker.header.frame_id = globalFrame_;
             marker.header.stamp = ros::Time::now();
             marker.id = rand();
-            ;
+            
             marker.type = visualization_msgs::Marker::SPHERE;
             marker.pose.position.x = reverseGoal.pose.position.x;
             marker.pose.position.y = reverseGoal.pose.position.y;
@@ -759,7 +759,10 @@ public:
 
           bool result = sendGoal(startingLocation_, -1, true);
 
+          cerr<<" status back to starting location in reverse: "<<result<<endl;
+
           disableReverse();
+          
           return true;
         }
 
@@ -798,6 +801,16 @@ public:
                              float robot_h, float delta_w_cnter, float delta_h_center)
   {
     // Mat tmp = sefetyMap.clone();
+    float distFromStatingPointM = 
+      goalCalculator.distanceCalculate(cv::Point2d(robotPose.pose.position.x, robotPose.pose.position.y),
+                  cv::Point2d(startingLocation_.pose.position.x, startingLocation_.pose.position.y));
+
+    cerr<<" distFromStatingPointM "<<distFromStatingPointM<<endl;
+    if (distFromStatingPointM < 0.15){
+
+      cerr<<" the robot is very close to the starting location, so int probably can rotate"<<endl;
+      return false;
+    }
 
     cv::Point2d robotPix;
     robotPix.x = (robotPose.pose.position.x - map_origin_position_x) / mapResolution_;
@@ -883,32 +896,7 @@ public:
     return true;
   }
 
-  void buildSafetyMap()
-  {
-    ros::Rate rate(15);
-    while (ros::ok())
-    {
-      ros::spinOnce();
-
-      if (!initSlamMap_)
-      {
-        continue;
-      }
-
-      if (!updateRobotLocation())
-      {
-        continue;
-      }
-
-      cerr << "robot pose " << robotPose_.pose.position.x << " ," << robotPose_.pose.position.y << endl;
-      cerr << "robot orientation " << robotPose_.pose.orientation.x << " ," << robotPose_.pose.orientation.y << ", "
-           << robotPose_.pose.orientation.z << ", " << robotPose_.pose.orientation.w << endl;
-      cerr << "-------------------------------------- " << endl;
-
-      rate.sleep();
-    }
-  }
-
+  
   bool initialization()
   {
     
@@ -1266,6 +1254,12 @@ public:
         continue;
       }
 
+      if (exit_)
+      { 
+        setState("USER_CTRL_C");
+        return;
+      }
+
       switch (coverage_state_)
       {
         case COVERAGE_BY_STRAIGHT_LINES: {
@@ -1334,12 +1328,9 @@ public:
               return;
             }
 
-            
-
+           
             currentAlgoMap_ = getCurrentMap();
             updateRobotLocation();
-
-            cerr<<"0000000000000 "<<endl;
 
             addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_, convertPoseToPix(robotPose_));
 
@@ -1501,7 +1492,8 @@ public:
               // check if robot cant rotate in place, if so make small reverse
               if (getSafetyMap(safetyMap) )
               {
-                bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+                bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, 
+                  robot_w_m_, robot_h_m_, 0, 0.2);
 
                 if (!canRotateInPlace)
                 {
@@ -1587,8 +1579,7 @@ public:
           { 
             setState("USER_CTRL_C");
             return;
-          }         
-          
+          }              
 
           break;
         }
@@ -1608,9 +1599,7 @@ public:
           { 
             setState("USER_CTRL_C");
             return;
-          }
-
-         
+          }         
 
           break;
         }
@@ -1705,7 +1694,7 @@ private:
     if (client.call(srv))
     {
       cerr << " plan size " << srv.response.plan.poses.size() << endl;
-      ;
+     
 
       path = srv.response.plan;
 
@@ -1759,6 +1748,8 @@ private:
     line_strip.ns = "points_and_lines";
     line_strip.pose.orientation.w = 1.0;
     line_strip.id = 6000;
+    line_strip.lifetime = ros::Duration(1.0);
+
 
     line_strip.type = visualization_msgs::Marker::LINE_STRIP;
 
@@ -3306,6 +3297,12 @@ private:
     {
       ros::spinOnce();
 
+      if (exit_)
+      { 
+        setState("USER_CTRL_C");
+        return false;
+      }
+
       updateRobotLocation();
 
       removeGoalsByRobotRout();
@@ -3369,13 +3366,7 @@ private:
           moveBaseController_.moveBaseClient_.cancelGoal();
           return true;
         }
-      }
-
-      if (exit_)
-      { 
-        setState("USER_CTRL_C");
-        return true;
-      }
+      }      
 
       
       moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
@@ -3589,6 +3580,8 @@ private:
       //save to OneDrive
       cv::imwrite("/root/OneDrive/" + image_name_format + ".png", robotTreaceImg);
 
+
+
       // cv::imwrite(coverage_img_path_ + "patthern.png", patternImg);
 
       imgSaved_ = true;
@@ -3660,7 +3653,7 @@ private:
     srv_req.config = conf;
     if (ros::service::call("/move_base/DWAPlannerROS/set_parameters", srv_req, srv_resp))
     {
-      cerr << " after disable reverse " << endl;
+      cerr << " after set reverse " << endl;
     }
     else
     {
@@ -3721,18 +3714,17 @@ private:
     {
       updateRobotLocation();
 
-      // float currDeg =
-      //     angles::to_degrees(atan2((2.0 * (robotPose_.pose.orientation.w * robotPose_.pose.orientation.z +
-      //                                      robotPose_.pose.orientation.x * robotPose_.pose.orientation.y)),
-      //                              (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
-      //                                            robotPose_.pose.orientation.z * robotPose_.pose.orientation.z))));
+      if (exit_)
+      { 
+        setState("USER_CTRL_C");
+        return false;
+      }
       
-       float currDeg =
+      float currDeg =
           angles::to_degrees(atan2((2.0 * (currOdom_.pose.pose.orientation.w * currOdom_.pose.pose.orientation.z +
                                            currOdom_.pose.pose.orientation.x * currOdom_.pose.pose.orientation.y)),
                                    (1.0 - 2.0 * (currOdom_.pose.pose.orientation.y * currOdom_.pose.pose.orientation.y +
                                     currOdom_.pose.pose.orientation.z * currOdom_.pose.pose.orientation.z))));
-      
        
       
       // init
