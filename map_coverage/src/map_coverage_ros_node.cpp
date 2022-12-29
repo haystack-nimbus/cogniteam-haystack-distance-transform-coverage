@@ -451,7 +451,7 @@ public:
             // check if robot cant rotate in place, if so make small reverse
             if (getSafetyMap(safetyMap) && safetyMap.data)
             {
-              bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+              bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
               if (!canRotateInPlace)
               {
@@ -634,7 +634,7 @@ public:
         return false;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
       }
 
-      bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
       if (!canRotateInPlace)
       {
@@ -652,7 +652,7 @@ public:
           
 
           bool canRotateInPlace =
-              checkIfRobotIsBlocked(safetyMap, robotHistoryPathMsg_.poses[i], robot_w_m_, robot_h_m_, 0, 0.2);
+              checkIFsafeToRotate(safetyMap, robotHistoryPathMsg_.poses[i], robot_w_m_, robot_h_m_, 0, 0.2);
 
           if (canRotateInPlace)
           {
@@ -798,7 +798,7 @@ public:
     return outPoint;
   }
 
-  bool checkIfRobotIsBlocked(const cv::Mat& sefetyMap, const geometry_msgs::PoseStamped& robotPose, float robot_w,
+  bool checkIFsafeToRotate(const cv::Mat& sefetyMap, const geometry_msgs::PoseStamped& robotPose, float robot_w,
                              float robot_h, float delta_w_cnter, float delta_h_center)
   {
     // Mat tmp = sefetyMap.clone();
@@ -806,11 +806,10 @@ public:
       goalCalculator.distanceCalculate(cv::Point2d(robotPose.pose.position.x, robotPose.pose.position.y),
                   cv::Point2d(startingLocation_.pose.position.x, startingLocation_.pose.position.y));
 
-    cerr<<" distFromStatingPointM "<<distFromStatingPointM<<endl;
     if (distFromStatingPointM < 0.15){
 
-      cerr<<" the robot is very close to the starting location, so int probably can rotate"<<endl;
-      return false;
+      cerr<<" the robot is very close to the starting location, so it probably can rotate"<<endl;
+      return true;
     }
 
     cv::Point2d robotPix;
@@ -1048,7 +1047,7 @@ public:
     { 
       cerr<<" check if robot can rotate in place ( 1 meter goal) "<<endl;
       bool canRotateInPlace = 
-        checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+        checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
       if (canRotateInPlace)
       {
@@ -1195,7 +1194,7 @@ public:
 
 
           bool canRotateInPlace = 
-            checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+            checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
           if (canRotateInPlace)
           {
@@ -1424,7 +1423,7 @@ public:
                   if (getSafetyMap(safetyMap) )
                   {
                     bool canRotateInPlace =
-                        checkIfRobotIsBlocked(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+                        checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
                     if (!canRotateInPlace)
                     {
@@ -1493,7 +1492,7 @@ public:
               // check if robot cant rotate in place, if so make small reverse
               if (getSafetyMap(safetyMap) )
               {
-                bool canRotateInPlace = checkIfRobotIsBlocked(safetyMap, robotPose_, 
+                bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, 
                   robot_w_m_, robot_h_m_, 0, 0.2);
 
                 if (!canRotateInPlace)
