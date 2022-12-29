@@ -220,7 +220,7 @@ public:
       cerr << " map-coverage is now connecting with move-base !! " << endl;
       disableReverse();
       cerr<<" start one dirve monitor"<<endl;
-      int status = std::system("python3 one_drive_png.py");
+      int status = std::system("onedrive --monitor");
     }
 
     // rosparam
