@@ -219,8 +219,8 @@ public:
       ros::Duration(1).sleep();
       cerr << " map-coverage is now connecting with move-base !! " << endl;
       disableReverse();
-      cerr<<" start one dirve monitor"<<endl;
-      int status = std::system("onedrive --monitor");
+      cerr<<" start one drive monitor"<<endl;
+      // int status = std::system("onedrive --monitor");
     }
 
     // rosparam
