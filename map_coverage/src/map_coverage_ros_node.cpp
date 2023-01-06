@@ -317,10 +317,24 @@ public:
     // moveBaseController_.cancelNavigation();
     ros::Duration(1).sleep();
 
+    turnOffLamp();
+
+    lampTimer_.stop();
+
+
+
     cerr << "MapCoverageManager distructor " << endl;
     saveCoverageImg();
 
     ros::shutdown();
+  }
+
+  void turnOffLamp(){
+    
+    std_msgs::Bool msg;
+    msg.data = false;
+    uv_lamp_set_state_pub_.publish(msg);
+  
   }
 
   void setState(string state)
@@ -473,6 +487,9 @@ public:
           break;
         }
         case ERROR_EXPLORE: {
+
+          lampTimer_.stop();
+
           node_.setParam("/coverage/state", "STOPPED");
           state_ = "STOPPED";
 
@@ -918,6 +935,12 @@ public:
       {
         ros::spinOnce();
 
+        if (exit_)
+        { 
+          setState("USER_CTRL_C");
+          return false;
+        }
+
         auto end = ros::WallTime::now();
 
         auto duration = (end - startTime).toSec();
@@ -1075,6 +1098,12 @@ public:
         // THE Robot moved 1 meter forward but cant rotate-in-place
         // try to find other safe location for 360 deg
         for (int trial = 0; trial < 3; trial ++) {
+
+          if (exit_)
+          { 
+            setState("USER_CTRL_C");
+            return false;
+          }
           
           cerr<<" trial : "<<trial<<endl;
           // find safe location on cost-map
@@ -1566,7 +1595,11 @@ public:
           }
         }
         case COVERAGE_DONE: {
+          
           cerr << " COVERAGE_DONE " << endl;
+
+          lampTimer_.stop();
+
 
           node_.setParam("/coverage/state", "STOPPED");
           state_ = "STOPPED";
@@ -1585,6 +1618,9 @@ public:
         }
 
         case ERROR_COVERAGE: {
+
+          lampTimer_.stop();
+
           if (!errCoverage_)
           {
             cerr << " ERROR_COVERAGE " << endl;
@@ -3797,13 +3833,7 @@ private:
     return true;
   }
 
-  void turnOffLamp(){
-    
-    std_msgs::Bool msg;
-    msg.data = false;
-    uv_lamp_set_state_pub_.publish(msg);
   
-  }
 
   void turnOnLamp(){
     
@@ -3997,7 +4027,9 @@ int main(int argc, char** argv)
     }
   }
   else
-  {
+  { 
+
+    mapCoverageManager.turnOffLamp();
     mapCoverageManager.setState("INITIALIZATION_ERROR");
     cerr << " initialization failed  " << endl;
   }
