@@ -111,6 +111,7 @@ geometry_msgs::PoseStamped startingLocation_;
 string startingTime_;
 
 bool exit_ = false;
+bool exitPerson_ = false;
 
 enum GoalState
 {
@@ -357,6 +358,14 @@ public:
       if (exit_)
       { 
         setState("USER_CTRL_C");
+        return false;
+      }
+
+      if (exitPerson_)
+      { 
+        turnOffLamp();
+
+        setState("PERSON_DETECTED");
         return false;
       }
 
@@ -941,6 +950,14 @@ public:
           return false;
         }
 
+        if (exitPerson_)
+        { 
+          turnOffLamp();
+
+          setState("PERSON_DETECTED");
+          return false;
+        }
+
         auto end = ros::WallTime::now();
 
         auto duration = (end - startTime).toSec();
@@ -1102,6 +1119,14 @@ public:
           if (exit_)
           { 
             setState("USER_CTRL_C");
+            return false;
+          }
+
+          if (exitPerson_)
+          { 
+            turnOffLamp();
+
+            setState("PERSON_DETECTED");
             return false;
           }
           
@@ -1289,6 +1314,14 @@ public:
         return;
       }
 
+      if (exitPerson_)
+      { 
+        turnOffLamp();
+
+        setState("PERSON_DETECTED");
+        return;
+      }
+
       switch (coverage_state_)
       {
         case COVERAGE_BY_STRAIGHT_LINES: {
@@ -1354,6 +1387,14 @@ public:
               cerr<<"exit "<<endl;
               setState("USER_CTRL_C");
               saveCoverageImg();
+              return;
+            }
+
+            if (exitPerson_)
+            { 
+              turnOffLamp();
+
+              setState("PERSON_DETECTED");
               return;
             }
 
@@ -1612,7 +1653,15 @@ public:
           { 
             setState("USER_CTRL_C");
             return;
-          }              
+          }  
+
+          if (exitPerson_)
+          { 
+            turnOffLamp();
+
+            setState("PERSON_DETECTED");
+            return;
+          }            
 
           break;
         }
@@ -1635,7 +1684,15 @@ public:
           { 
             setState("USER_CTRL_C");
             return;
-          }         
+          }     
+
+          if (exitPerson_)
+          { 
+            turnOffLamp();
+
+            setState("PERSON_DETECTED");
+            return ;
+          }    
 
           break;
         }
@@ -1672,7 +1729,7 @@ private:
 
     // if we are still in  INITIALIZATION, do nothing
 
-    if( (state_ ==  "INITIALIZATION" || state_ == "IDLE") ) {
+    if( (state_ ==  "INITIALIZATION" || state_ == "IDLE" || !initializationGood_)  ) {
 
       return;
     }
@@ -1689,14 +1746,20 @@ private:
 
       turnOffLamp();
 
-      exit_ = true;
+      exitPerson_ = true;
+
+      return;
+
+      
     } 
 
-    else {
-
+    else if ( initializationGood_ ) {
+      
       turnOnLamp();
     }
     
+    turnOffLamp();
+
 
   }
   void clearAllCostMaps()
@@ -3339,6 +3402,13 @@ private:
         return false;
       }
 
+      if (exitPerson_)
+      { 
+        turnOffLamp();
+        setState("PERSON_DETECTED");
+        return false;
+      }
+
       updateRobotLocation();
 
       removeGoalsByRobotRout();
@@ -3756,6 +3826,13 @@ private:
         return false;
       }
       
+      if (exitPerson_)
+      { 
+        turnOffLamp();
+        setState("PERSON_DETECTED");
+        return false;
+      }
+
       float currDeg =
           angles::to_degrees(atan2((2.0 * (currOdom_.pose.pose.orientation.w * currOdom_.pose.pose.orientation.z +
                                            currOdom_.pose.pose.orientation.x * currOdom_.pose.pose.orientation.y)),
@@ -3841,6 +3918,10 @@ private:
     msg.data = true;
     uv_lamp_set_state_pub_.publish(msg);
   }
+
+public:
+
+  bool initializationGood_ = false;
 
 private:
   COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE_BY_STRAIGHT_LINES;
@@ -4018,7 +4099,8 @@ int main(int argc, char** argv)
   signal(SIGINT, (void (*)(int))MapCoverageManager::mySigintHandler);
 
   if (mapCoverageManager.initialization())
-  {
+  { 
+    mapCoverageManager.initializationGood_ = true;
     if (mapCoverageManager.explore())
     {
       mapCoverageManager.setCoverageState(true);
