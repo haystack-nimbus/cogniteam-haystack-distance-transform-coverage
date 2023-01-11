@@ -231,6 +231,9 @@ public:
     nodePrivate.param("robot_w_m", robot_w_m_, 0.53);
     nodePrivate.param("robot_h_m", robot_h_m_, 0.53);
     nodePrivate.param("sanitization_radius", sanitization_radius_, 1.0);
+    nodePrivate.param("path_deg_angle_threshold", path_deg_angle_threshold_, 100.0);
+
+    
 
     nodePrivate.param("duration_wait_for_move_base_response", duration_wait_for_move_base_response_, 15.0);
     nodePrivate.param<string>("coverage_image_path", coverage_img_path_, string(""));
@@ -650,7 +653,7 @@ public:
     // cerr<<" the diff is "<<diffAngles<<endl;
 
     /// THE path IS BEHIND THE ROBOT !!!!!!!
-    if ((diffAngles) > 100)
+    if ((diffAngles) > path_deg_angle_threshold_)
     {
       cerr << " the path is behind the robot !! " << endl;
       cv::Mat safetyMap;
@@ -4053,6 +4056,9 @@ private:
 
   double robot_w_m_ = 0.53;
   double robot_h_m_ = 0.53;
+
+  double path_deg_angle_threshold_ = 100.0;
+
   double walls_inflation_m_ = 0.3;
 
   double sanitization_radius_ = 1.0;
