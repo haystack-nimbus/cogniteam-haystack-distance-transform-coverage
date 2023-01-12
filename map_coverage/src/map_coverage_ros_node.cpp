@@ -220,8 +220,6 @@ public:
       ros::Duration(1).sleep();
       cerr << " map-coverage is now connecting with move-base !! " << endl;
       disableReverse();
-      cerr<<" start one drive monitor"<<endl;
-      // int status = std::system("onedrive --monitor");
     }
 
     // rosparam
@@ -3686,12 +3684,8 @@ private:
       cerr << "full_img_name: " << full_img_name << endl;
 
       cv::imwrite(full_img_name, robotTreaceImg);
-      //save to OneDrive
-      cv::imwrite("/root/OneDrive/" + image_name_format + ".png", robotTreaceImg);
-
-
-
-      // cv::imwrite(coverage_img_path_ + "patthern.png", patternImg);
+      //save to nimbus-cloud
+      cv::imwrite("/var/lib/nimbus/" + image_name_format + ".png", robotTreaceImg);
 
       imgSaved_ = true;
     }
