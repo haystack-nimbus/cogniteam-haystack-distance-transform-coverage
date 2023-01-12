@@ -499,9 +499,8 @@ public:
         case ERROR_EXPLORE: {
 
           lampTimer_.stop();
-
-          node_.setParam("/coverage/state", "STOPPED");
-          state_ = "STOPPED";
+         
+          setState("STOPPED");
 
           cerr << "ERROR_EXPLORE " << endl;
           break;
@@ -1642,9 +1641,7 @@ public:
 
           lampTimer_.stop();
 
-
-          node_.setParam("/coverage/state", "STOPPED");
-          state_ = "STOPPED";
+          setState("COVERAGE_DONE");
 
           saveCoverageImg();
 
@@ -3685,7 +3682,7 @@ private:
 
       cv::imwrite(full_img_name, robotTreaceImg);
       //save to nimbus-cloud
-      cv::imwrite("/var/lib/nimbus/" + image_name_format + ".png", robotTreaceImg);
+      cv::imwrite("/var/lib/nimbus/records/" + image_name_format + ".png", robotTreaceImg);
 
       imgSaved_ = true;
     }
