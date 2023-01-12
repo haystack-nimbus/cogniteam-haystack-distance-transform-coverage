@@ -1647,19 +1647,7 @@ public:
 
           coverage_state_ = COVERAGE_DONE;
 
-          if (exit_)
-          { 
-            setState("USER_CTRL_C");
-            return;
-          }  
-
-          if (exitPerson_)
-          { 
-            turnOffLamp();
-
-            setState("PERSON_DETECTED");
-            return;
-          }            
+                  
 
           break;
         }
