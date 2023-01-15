@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(map_coverage)
 
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++14)
 
 find_package(OpenCV REQUIRED )
 
@@ -16,6 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
   move_base_msgs
   actionlib
   tf
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
   std_msgs
   roslib
   geometry_msgs

@@ -277,8 +277,8 @@ public:
       {
         circle(grayScaleImg, currentP, radiusFreeSpace_ , Scalar(255, 0, 0), -1, 8, 0);
 
-        imshow("grayScaleImg", grayScaleImg);
-        waitKey(0);
+        // imshow("grayScaleImg", grayScaleImg);
+        // waitKey(0);
       }
 
     } while (true);
@@ -289,8 +289,8 @@ public:
 
         cv::line(dbg, path[i],  path[i + 1], Scalar(255, 255, 0), 2);
 
-        imshow("inner_dbg",dbg);
-        waitKey(0);
+        // imshow("inner_dbg",dbg);
+        // waitKey(0);
 
 
       } 
