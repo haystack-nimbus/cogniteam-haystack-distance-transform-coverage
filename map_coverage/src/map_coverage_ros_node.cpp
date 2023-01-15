@@ -932,6 +932,8 @@ public:
     int secondsIdle = 5;
     float mForward = 0.7;
 
+    int numOfRounds = 1;
+
     if (enableIdle)
     {
       node_.setParam("/coverage/state", "IDLE");
@@ -1092,8 +1094,8 @@ public:
       if (canRotateInPlace)
       {
         cerr<<" robot is eable to rotate in place in 1 meter goal "<<endl;
-        //rotate the robot in-place 2 times
-        if ( !rotateInPlace(2)) // 
+        //rotate the robot in-place numOfRounds times
+        if ( !rotateInPlace(numOfRounds)) // 
         {
           cerr << " person detectd !!! " << endl;
           return false;
@@ -1253,8 +1255,8 @@ public:
           if (canRotateInPlace)
           {
             cerr<<" the robot is able to rotate in the safe goal "<<endl;
-            // rotate the robot in-place 2 times
-            if (!rotateInPlace(2))
+            // rotate the robot in-place numOfRounds times
+            if (!rotateInPlace(numOfRounds))
             {
               cerr << " person detectd !!! " << endl;
               return false;
@@ -1415,9 +1417,9 @@ public:
 
                   float dist = goalCalculator.distanceCalculate(wayPointPix, markedGoalsOnMap[i]);
 
-                  if (dist < ((1.0 / mapResolution_) * (0.3)))
+                  if (dist < ((1.0 / mapResolution_) * (0.2)))
                   {
-                    path_poses_with_status_.setStatByIndex(j, COVERED_BY_OBSTACLE);
+                    path_poses_with_status_.setStatByIndex(j, COVERED);
                   }
                 }
               }
@@ -1474,6 +1476,12 @@ public:
                   {
                     continue;
                   }
+                } else {
+
+                  // dont send the goal beacsue plan no valid!!
+                  cerr<<" failed to make plan fo connectecd compoennet goal, mark it "<<endl;
+                  markedGoalsOnMap.push_back(finalGoalToNavigate);
+                  continue;
                 }
 
                 bool result = sendGoal(nextGoal, -1, true);
@@ -1551,6 +1559,13 @@ public:
               {
                 continue;
               }
+            }  
+            else {
+
+              // dont send the goal beacsue plan no valid!!
+              cerr<<" failed to make plan for direction goal, mark it "<<endl;
+              path_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, COVERED);
+              continue;
             }
 
             bool result = sendGoal(nextGoal, bestGoalIndexWaypoint);
@@ -3626,8 +3641,7 @@ private:
           circle(robotTreaceImg, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 0, 255),
                  -1, 8, 0);
         }
-        else if (path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ||
-                 path_poses_with_status_.status_[i] == COVERED)
+        else if (path_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH)
         {
           circle(robotTreaceImg, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(255, 0, 0),
                  -1, 8, 0);
@@ -3635,6 +3649,11 @@ private:
         else if (path_poses_with_status_.status_[i] == UN_COVERED)
         {
           circle(robotTreaceImg, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 255, 0),
+                 -1, 8, 0);
+        }
+        else if (path_poses_with_status_.status_[i] == COVERED)
+        {
+          circle(robotTreaceImg, convertPoseToPix(path_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 165, 255),
                  -1, 8, 0);
         }
       }
