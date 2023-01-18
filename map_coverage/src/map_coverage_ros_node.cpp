@@ -1717,8 +1717,7 @@ public:
 private:
 
   void updateTimerCallback(const ros::TimerEvent&) {
-
-
+    
     //if coverage done
 
     if (coverage_state_ == COVERAGE_DONE) {
@@ -1752,11 +1751,11 @@ private:
       return;
 
       
-    } 
-
-    else if ( initializationGood_ ) {
+    } else if ( initializationGood_ ) {
       
       turnOnLamp();
+
+      return;
     }
     
     turnOffLamp();
