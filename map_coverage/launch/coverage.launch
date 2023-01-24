@@ -8,7 +8,14 @@
     <arg name="sanitization_radius" default="0.7" />  
 
     <arg name="path_deg_angle_threshold" default="100.0" />  
+    
+    <arg name="COVERED_BY_OBSTACLE_COLOR" default="FF0000" />  
+    <arg name="COVERED_BY_ROBOT_PATH_COLOR" default="0000FF" />  
+    <arg name="UN_COVERED_COLOR" default="008000" /> 
+    <arg name="REJECTED_COLOR" default="FFA500" />  
 
+
+    
 
 
    <arg name="coverage_image_path" default="/haystack_disinfect_report/images/" /> 
@@ -44,7 +51,12 @@
         
         <param name="reducing_goals" value="$(arg reducing_goals)" /> 
 
-        <param name="show_live_video" value="$(arg show_live_video)" />        
+        <param name="show_live_video" value="$(arg show_live_video)" />    
+        
+        <param name="COVERED_BY_OBSTACLE_COLOR" value="$(arg COVERED_BY_OBSTACLE_COLOR)" /> 
+        <param name="COVERED_BY_ROBOT_PATH_COLOR" value="$(arg COVERED_BY_ROBOT_PATH_COLOR)" />
+        <param name="UN_COVERED_COLOR" value="$(arg UN_COVERED_COLOR)" />
+        <param name="REJECTED_COLOR" value="$(arg REJECTED_COLOR)" />   
 
        
     </node>
