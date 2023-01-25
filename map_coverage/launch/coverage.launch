@@ -7,7 +7,7 @@
 
     <arg name="sanitization_radius" default="0.7" />  
 
-    <arg name="path_deg_angle_threshold" default="100.0" />  
+    <arg name="path_deg_angle_threshold" default="30.0" />  
     
     <arg name="COVERED_BY_OBSTACLE_COLOR" default="FF0000" />  
     <arg name="COVERED_BY_ROBOT_PATH_COLOR" default="0000FF" />  
@@ -56,7 +56,10 @@
         <param name="COVERED_BY_OBSTACLE_COLOR" value="$(arg COVERED_BY_OBSTACLE_COLOR)" /> 
         <param name="COVERED_BY_ROBOT_PATH_COLOR" value="$(arg COVERED_BY_ROBOT_PATH_COLOR)" />
         <param name="UN_COVERED_COLOR" value="$(arg UN_COVERED_COLOR)" />
-        <param name="REJECTED_COLOR" value="$(arg REJECTED_COLOR)" />   
+        <param name="REJECTED_COLOR" value="$(arg REJECTED_COLOR)" />  
+
+        <param name="path_deg_angle_threshold" value="$(arg path_deg_angle_threshold)" /> 
+
 
        
     </node>
