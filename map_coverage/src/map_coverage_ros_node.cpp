@@ -106,6 +106,7 @@ using namespace std;
 #include "../include/DisantanceMapCoverage.h"
 #include "../include/GoalCalculator.h"
 #include "../include/MoveBaseController.h"
+#include "../include/logManger.h"
 
 geometry_msgs::PoseStamped startingLocation_;
 string startingTime_;
@@ -235,8 +236,6 @@ public:
     nodePrivate.param<string>("UN_COVERED_COLOR", UN_COVERED_COLOR, string("008000"));
     nodePrivate.param<string>("REJECTED_COLOR", REJECTED_COLOR, string("FFA500"));
 
-    
-
     nodePrivate.param("duration_wait_for_move_base_response", duration_wait_for_move_base_response_, 15.0);
     nodePrivate.param<string>("coverage_image_path", coverage_img_path_, string(""));
     nodePrivate.param<string>("base_frame", baseFrame_, string("base_link"));
@@ -246,10 +245,11 @@ public:
 
     nodePrivate.param("show_live_video", show_live_video_, false);
 
-
     nodePrivate.param("/coverage/percentage", percentCoverage_, 0.0);
     nodePrivate.param("/coverage/state", state_, string("IDLE"));
     nodePrivate.param("/coverage/image_name", image_name_, string(""));
+
+    logManager_.setLogPath(coverage_img_path_);
 
     // subs
     global_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1, &MapCoverageManager::globalMapCallback, this);
@@ -258,20 +258,17 @@ public:
     global_cost_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
                                                                     &MapCoverageManager::globalCostMapCallback, this);
 
-    camera_scan_sub_ = node_.subscribe<sensor_msgs::LaserScan>("/ttt", 1,
-                                                               &MapCoverageManager::cameraScanCallback, this);
+    camera_scan_sub_ =
+        node_.subscribe<sensor_msgs::LaserScan>("/ttt", 1, &MapCoverageManager::cameraScanCallback, this);
 
-    odom_sub_ = node_.subscribe<nav_msgs::Odometry>("/odom", 1,
-                                &MapCoverageManager::odomCallback, this);                                                           
+    odom_sub_ = node_.subscribe<nav_msgs::Odometry>("/odom", 1, &MapCoverageManager::odomCallback, this);
 
     is_person_detected_sub_ =
         node_.subscribe<std_msgs::Bool>("/is_person_detected", 1, &MapCoverageManager::personsCallback, this);
 
+    // timer
 
-    // timer 
-
-    lampTimer_ = node_.createTimer(ros::Rate(10), 
-                &MapCoverageManager::updateTimerCallback, this);
+    lampTimer_ = node_.createTimer(ros::Rate(10), &MapCoverageManager::updateTimerCallback, this);
     // pubs
 
     image_transport::ImageTransport it(node_);
@@ -327,7 +324,7 @@ public:
 
     lampTimer_.stop();
 
-
+    logManager_.closeFile();
 
     cerr << "MapCoverageManager distructor " << endl;
     saveCoverageImg();
@@ -335,24 +332,32 @@ public:
     ros::shutdown();
   }
 
-  void turnOffLamp(){
-    
+  void turnOffLamp()
+  {
     std_msgs::Bool msg;
     msg.data = false;
     uv_lamp_set_state_pub_.publish(msg);
-  
   }
 
   void setState(string state)
   {
     node_.setParam("/coverage/state", state);
     state_ = state;
-  }
 
+    if (state_ == "USER_CTRL_C")
+    {
+      logManager_.writeToLog("USER_CTRL_C");
+      logManager_.closeFile();
+    }
+
+    if (state_ == "PERSON_DETECTED")
+    {
+      logManager_.writeToLog("PERSON_DETECTED");
+    }
+  }
 
   bool explore()
   {
-
     vector<cv::Point2d> unreachedPointFromFronitiers;
 
     while (ros::ok())
@@ -360,7 +365,7 @@ public:
       ros::spinOnce();
 
       if (exit_)
-      { 
+      {
         setState("USER_CTRL_C");
         saveCoverageImg();
         turnOffLamp();
@@ -369,13 +374,13 @@ public:
       }
 
       if (exitPerson_)
-      { 
+      {
         turnOffLamp();
         setState("PERSON_DETECTED");
         saveCoverageImg();
 
         return false;
-      }     
+      }
 
       if (!initSlamMap_ || !initGlobalCostMap_)
       {
@@ -394,7 +399,7 @@ public:
       state_ = "RUNNING";
 
       currentAlgoMap_ = getCurrentMap();
-    
+
       // create the exploration map (gmapping + global cost map)
       Mat explorationImgMap = currentAlgoMap_.clone();
       addDilationByGlobalCostMap(costMapImg_, explorationImgMap, convertPoseToPix(robotPose_));
@@ -424,8 +429,9 @@ public:
 
           std::vector<Frontier> currentEdgesFrontiers;
 
-          //  try to find next exploration goal 
+          //  try to find next exploration goal
           cerr << " try to find next exploration goal " << endl;
+          logManager_.writeToLog("try to find next exploration goal");
           goalCalculator.calcEdgesFrontiers(explorationImgMap, currentEdgesFrontiers, robotPix, mapResolution_,
                                             unreachedPointFromFronitiers);
 
@@ -445,7 +451,6 @@ public:
           q.y = orientation.getY();
           q.z = orientation.getZ();
 
-
           // pick the closest (from the robot) frontier goal
           auto nextFrontierGoal = convertPixToPose(currentEdgesFrontiers[0].center, q);
 
@@ -455,13 +460,18 @@ public:
           nav_msgs::Path wanted_path;
           bool resMakePlan = makePlan(wanted_path, robotPose_, nextFrontierGoal);
           cerr << " resMakePlan " << resMakePlan << endl;
+
           if (resMakePlan)
           {
+            logManager_.writeToLog("trobot was able to make plan to the frontier goal");
+
             bool reverseDone = reverseLogic(wanted_path, nextFrontierGoal);
+
+            logManager_.writeToLog("the reverse (backward to the safe goal) was down");
             cerr << " reverseDone " << reverseDone << endl;
 
-            // If the robot traveled in reverse mode, 
-            // it means that it did not travel to a frontier goal, 
+            // If the robot traveled in reverse mode,
+            // it means that it did not travel to a frontier goal,
             // but to a safe point,
             // so in the next iteration it is necessary to recalculate
             if (reverseDone)
@@ -469,9 +479,12 @@ public:
               explore_state_ = NAV_TO_NEXT_FRONTIER;
               break;
             }
-          } else {
-
+          }
+          else
+          {
             cerr << " failed to calaculate path to this goal " << endl;
+            logManager_.writeToLog("failed to calaculate path to this frontier goal");
+
             unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
             explore_state_ = NAV_TO_NEXT_FRONTIER;
             break;
@@ -479,12 +492,15 @@ public:
 
           // the robot was able to calculate path to this goal witout reverse logic
           cerr << " sending goal to the next froniter pix " << currentEdgesFrontiers[0].center << endl;
+          logManager_.writeToLog("ending goal to the next froniter pix");
 
           bool result = sendGoal(nextFrontierGoal, -1, true);
 
           if (!result)
           {
             cerr << " failed to reach exploration goal " << endl;
+            logManager_.writeToLog("failed to reach exploration goal, push to black list");
+
             unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
           }
 
@@ -502,6 +518,8 @@ public:
               {
                 cerr << " CAN'T ROTATE TO THE TARGET !! " << endl;
 
+                logManager_.writeToLog("cant rotate to the goal, make small reverese");
+
                 smallReverseAllowed_ = true;
 
                 makeSmallReverse();
@@ -518,11 +536,12 @@ public:
           break;
         }
         case ERROR_EXPLORE: {
-
           lampTimer_.stop();
-         
+
           setState("STOPPED");
           saveCoverageImg();
+
+          logManager_.writeToLog("ERROR_EXPLORE");
 
           cerr << "ERROR_EXPLORE " << endl;
           break;
@@ -539,9 +558,9 @@ public:
   }
 
   void makeSmallReverse()
-  { 
+  {
     // make sure that it sage to do small revers
-    {     
+    {
       if (!initSlamMap_ || !initGlobalCostMap_)
       {
         cerr << "map not recieved !!" << endl;
@@ -559,8 +578,8 @@ public:
       if (!getSafetyMap(safetyMap) || !safetyMap.data)
       {
         cerr << "failed to get getSafetyMap " << endl;
-        return ;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
-      }    
+        return;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
+      }
 
       float distBackwaredM = 0.5;
       // get robot heading
@@ -572,21 +591,20 @@ public:
                                                robotPose_.pose.orientation.z * robotPose_.pose.orientation.z)));
 
       cv::Point2d backwardPixLocation(robotPix.x + (distBackwaredM / mapResolution_) * cos(robotHeading),
-                                  robotPix.y + (distBackwaredM / mapResolution_) * sin(robotHeading));
+                                      robotPix.y + (distBackwaredM / mapResolution_) * sin(robotHeading));
 
-      if ( backwardPixLocation.x < 0 || backwardPixLocation.y < 0 ||
-          backwardPixLocation.x > safetyMap.cols || backwardPixLocation.y> safetyMap.rows){
-          
-
-          cerr<<" bad  backwardPixLocation "<<endl;
-          return;
+      if (backwardPixLocation.x < 0 || backwardPixLocation.y < 0 || backwardPixLocation.x > safetyMap.cols ||
+          backwardPixLocation.y > safetyMap.rows)
+      {
+        cerr << " bad  backwardPixLocation " << endl;
+        return;
       }
-       // check if the backwardPixLocation is blocked !!
+      // check if the backwardPixLocation is blocked !!
       int valn = safetyMap.at<uchar>(backwardPixLocation.y, backwardPixLocation.x);
       if (valn == 0)
       {
         cerr << " next backward goal is blocked !! the val is " << valn << endl;
-        return ;
+        return;
       }
 
       // check collision to next pix backward
@@ -616,9 +634,9 @@ public:
       reverse_cmd_vel_pub_.publish(velocity);
       rate.sleep();
 
-      if(!updateRobotLocation()){
-        
-        cerr<<" failed update rbot location "<<endl;
+      if (!updateRobotLocation())
+      {
+        cerr << " failed update rbot location " << endl;
         return;
       }
 
@@ -633,7 +651,7 @@ public:
       ros::spinOnce();
     }
 
-     cerr << " FINISHED SMALL REVERSE " << endl;
+    cerr << " FINISHED SMALL REVERSE " << endl;
   }
   bool reverseLogic(const nav_msgs::Path& wanted_path, const geometry_msgs::PoseStamped& wantedGoal)
   {
@@ -652,6 +670,8 @@ public:
     if (wanted_path.poses.size() < minNumOfPointsOnPath)
     {
       cerr << " path backward to small !" << endl;
+      logManager_.writeToLog("path backward to small !");
+
       return false;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
     }
 
@@ -675,6 +695,8 @@ public:
     if ((diffAngles) > path_deg_angle_threshold_)
     {
       cerr << " the path is behind the robot !! " << endl;
+      logManager_.writeToLog("the path is behind the robot !!");
+
       cv::Mat safetyMap;
       if (!getSafetyMap(safetyMap) || !safetyMap.data)
       {
@@ -687,6 +709,7 @@ public:
       if (!canRotateInPlace)
       {
         cerr << " cant rotate-in place !! enable reverse !! " << endl;
+        logManager_.writeToLog("cant rotate-in place !! enable reverse !!");
 
         /// find on the last forward path goal that the robot can rotate
 
@@ -697,8 +720,6 @@ public:
         }
         for (int i = robotHistoryPathMsg_.poses.size() - 1; i > 0; i--)
         {
-          
-
           bool canRotateInPlace =
               checkIFsafeToRotate(safetyMap, robotHistoryPathMsg_.poses[i], robot_w_m_, robot_h_m_, 0, 0.2);
 
@@ -722,6 +743,8 @@ public:
 
             cerr << " found reverse goal !! " << reverseGoal.pose.position.x << ", " << reverseGoal.pose.position.y
                  << endl;
+            logManager_.writeToLog("found reverse goal !!");
+
             foundReverseGoal = true;
 
             // set reverse mode
@@ -731,7 +754,7 @@ public:
             marker.header.frame_id = globalFrame_;
             marker.header.stamp = ros::Time::now();
             marker.id = rand();
-            
+
             marker.type = visualization_msgs::Marker::SPHERE;
             marker.pose.position.x = reverseGoal.pose.position.x;
             marker.pose.position.y = reverseGoal.pose.position.y;
@@ -752,12 +775,15 @@ public:
             backward_goal_marker_pub_.publish(marker);
 
             cerr << "send the reverse goal !!!!!" << endl;
+            logManager_.writeToLog("send the reverse goal !!!!!");
+
             // seng goal backward direction
             bool result = sendGoal(reverseGoal, -1, false, false, true);
 
             if (result)
             {
               cerr << "reverse goal reached !!! disable reverse " << endl;
+              logManager_.writeToLog("reverse goal reached !!! disable reverse");
 
               // reached the goal !!!
               disableReverse();
@@ -767,6 +793,7 @@ public:
             else
             {
               cerr << "reverse goal failed !!! disable reverse " << endl;
+              logManager_.writeToLog("EDGE_CASE_1: reverse goal failed !!! disable reverse");
 
               disableReverse();
               return true;
@@ -779,6 +806,8 @@ public:
         if (!foundReverseGoal)
         {
           cerr << " didnt found safe goal to rotate, going back in reverse to starting location " << endl;
+          logManager_.writeToLog(
+              "EDGE_CASE_2: didnt found safe goal to rotate, going back in reverse to starting location");
 
           setReverse();
 
@@ -786,7 +815,6 @@ public:
           marker.header.frame_id = globalFrame_;
           marker.header.stamp = ros::Time::now();
           marker.id = rand();
-          ;
           marker.type = visualization_msgs::Marker::SPHERE;
           marker.pose.position.x = startingLocation_.pose.position.x;
           marker.pose.position.y = startingLocation_.pose.position.y;
@@ -808,10 +836,12 @@ public:
 
           bool result = sendGoal(startingLocation_, -1, true);
 
-          cerr<<" status back to starting location in reverse: "<<result<<endl;
+          cerr << " status back to starting location in reverse: " << result << endl;
+
+          logManager_.writeToLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
 
           disableReverse();
-          
+
           return true;
         }
 
@@ -821,6 +851,7 @@ public:
     else
     {
       cerr << " the path in-front of the robot" << endl;
+      logManager_.writeToLog("the path in-front of the robot");
 
       return false;
     }
@@ -847,16 +878,16 @@ public:
   }
 
   bool checkIFsafeToRotate(const cv::Mat& sefetyMap, const geometry_msgs::PoseStamped& robotPose, float robot_w,
-                             float robot_h, float delta_w_cnter, float delta_h_center)
+                           float robot_h, float delta_w_cnter, float delta_h_center)
   {
     // Mat tmp = sefetyMap.clone();
-    float distFromStatingPointM = 
-      goalCalculator.distanceCalculate(cv::Point2d(robotPose.pose.position.x, robotPose.pose.position.y),
-                  cv::Point2d(startingLocation_.pose.position.x, startingLocation_.pose.position.y));
+    float distFromStatingPointM = goalCalculator.distanceCalculate(
+        cv::Point2d(robotPose.pose.position.x, robotPose.pose.position.y),
+        cv::Point2d(startingLocation_.pose.position.x, startingLocation_.pose.position.y));
 
-    if (distFromStatingPointM < 0.15){
-
-      cerr<<" the robot is very close to the starting location, so it probably can rotate"<<endl;
+    if (distFromStatingPointM < 0.15)
+    {
+      cerr << " the robot is very close to the starting location, so it probably can rotate" << endl;
       return true;
     }
 
@@ -874,12 +905,10 @@ public:
     cv::Point2d cneterOfRotationPix(robotPix.x + ((1.0 / mapResolution_) * (delta_h_center)) * cos(robotHeading),
                                     robotPix.y + ((1.0 / mapResolution_) * (delta_h_center)) * sin(robotHeading));
 
-    
-    if ( cneterOfRotationPix.x < 0 || cneterOfRotationPix.y < 0 ||
-        cneterOfRotationPix.x > sefetyMap.cols || 
-        cneterOfRotationPix.y > sefetyMap.rows) {
-
-          return false;
+    if (cneterOfRotationPix.x < 0 || cneterOfRotationPix.y < 0 || cneterOfRotationPix.x > sefetyMap.cols ||
+        cneterOfRotationPix.y > sefetyMap.rows)
+    {
+      return false;
     }
 
     float wPix = (1.0 / mapResolution_) * (robot_w);
@@ -898,10 +927,8 @@ public:
       {
         cv::Point2d pointBeam = it_map_back.pos();
 
-        if ( pointBeam.x < 0 || pointBeam.y < 0 ||
-          pointBeam.x > sefetyMap.cols || 
-          pointBeam.y > sefetyMap.rows) {
-
+        if (pointBeam.x < 0 || pointBeam.y < 0 || pointBeam.x > sefetyMap.cols || pointBeam.y > sefetyMap.rows)
+        {
           return false;
         }
 
@@ -944,7 +971,6 @@ public:
     return true;
   }
 
-  
   bool initialization()
   {
     int secondsIdle = 5;
@@ -957,14 +983,14 @@ public:
     auto startTime = ros::WallTime::now();
 
     cerr << "idle for  " << secondsIdle << " seconds " << endl;
-    
+
     // A robot stands still and does not move
     while (ros::ok())
     {
       ros::spinOnce();
 
       if (exit_)
-      { 
+      {
         setState("USER_CTRL_C");
         saveCoverageImg();
 
@@ -972,13 +998,11 @@ public:
       }
 
       if (exitPerson_)
-      { 
-
+      {
         saveCoverageImg();
 
         setState("PERSON_DETECTED");
         return false;
-
       }
 
       auto end = ros::WallTime::now();
@@ -991,25 +1015,27 @@ public:
     }
 
     // Robot starts the initialization phase
-    cerr<<" Robot starts the initialization phase "<<endl;
+    cerr << " Robot starts the initialization phase " << endl;
+    logManager_.writeToLog("Robot starts the initialization phase");
+
     node_.setParam("/coverage/state", "INITIALIZATION");
     state_ = "INITIALIZATION";
-    
+
     ros::spinOnce();
 
     if (exit_)
-    { 
+    {
       setState("USER_CTRL_C");
       saveCoverageImg();
       return false;
     }
 
-    if( detectedPerson_)
+    if (detectedPerson_)
     {
       saveCoverageImg();
       setState("PERSON_DETECTED");
       return false;
-    } 
+    }
 
     if (!initSlamMap_ || !initGlobalCostMap_)
     {
@@ -1023,8 +1049,7 @@ public:
       return false;
     }
 
-
-    // get map 
+    // get map
     Mat initalizationMap = getCurrentMap();
     addDilationByGlobalCostMap(costMapImg_, initalizationMap, convertPoseToPix(robotPose_));
     addFreeSpaceDilation(initalizationMap);
@@ -1033,24 +1058,25 @@ public:
     auto robotPix = convertPoseToPix(robotPose_);
 
     float robotHeading = atan2((2.0 * (robotPose_.pose.orientation.w * robotPose_.pose.orientation.z +
-                                        robotPose_.pose.orientation.x * robotPose_.pose.orientation.y)),
-                                (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
-                                              robotPose_.pose.orientation.z * robotPose_.pose.orientation.z)));
-    
+                                       robotPose_.pose.orientation.x * robotPose_.pose.orientation.y)),
+                               (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
+                                             robotPose_.pose.orientation.z * robotPose_.pose.orientation.z)));
+
     // Calculates the point of forward travel on the map
     cv::Point2d nextPixLocation(robotPix.x + (mForward / mapResolution_) * cos(robotHeading),
                                 robotPix.y + (mForward / mapResolution_) * sin(robotHeading));
 
-    if ( nextPixLocation.x < 0 || nextPixLocation.y < 0 ||
-      nextPixLocation.x > initalizationMap.cols || nextPixLocation.y > initalizationMap.rows)
+    if (nextPixLocation.x < 0 || nextPixLocation.y < 0 || nextPixLocation.x > initalizationMap.cols ||
+        nextPixLocation.y > initalizationMap.rows)
     {
-        return false;
+      return false;
     }
 
     int numOfRounds = 1;
 
+    cerr << " calculate " << mForward << " m goal " << endl;
+    logManager_.writeToLog(" calculate 0.7 m goal ");
 
-    cerr<<" calculate "<<mForward <<" m goal "<<endl;
     // convert pix to pose
     auto q = tf::createQuaternionMsgFromYaw(robotHeading);
     auto one_meter_goal = convertPixToPose(nextPixLocation, q);
@@ -1058,7 +1084,7 @@ public:
     visualization_msgs::Marker marker;
     marker.header.frame_id = globalFrame_;
     marker.header.stamp = ros::Time::now();
-    marker.id = rand();     
+    marker.id = rand();
     marker.type = visualization_msgs::Marker::ARROW;
     marker.pose.position.x = one_meter_goal.pose.position.x;
     marker.pose.position.y = one_meter_goal.pose.position.y;
@@ -1078,42 +1104,43 @@ public:
 
     backward_goal_marker_pub_.publish(marker);
 
-    
     bool result = sendGoal(one_meter_goal, -1, false, true);
-    
-    // If the rovbat failed to reach the goal
-    if (!result){
 
-      float dist_from_1_meter_goal = 
-      goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
-        cv::Point2d(one_meter_goal.pose.position.x, one_meter_goal.pose.position.y));
-      
-      cerr<<" the dist to "<<mForward<<" meter goal  "<<dist_from_1_meter_goal<<endl;
-      if ( !(dist_from_1_meter_goal < 0.25)) {
-        
-        cerr<<" failed to reach "<<mForward<<" meter goal , too far "<<endl;
+    // If the rovbat failed to reach the goal
+    if (!result)
+    {
+      float dist_from_1_meter_goal =
+          goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+                                           cv::Point2d(one_meter_goal.pose.position.x, one_meter_goal.pose.position.y));
+
+      cerr << " the dist to " << mForward << " meter goal  " << dist_from_1_meter_goal << endl;
+      if (!(dist_from_1_meter_goal < 0.25))
+      {
+        cerr << " failed to reach " << mForward << " meter goal , too far " << endl;
+        logManager_.writeToLog(" failed to reach 0.7 m goal ");
+
         return false;
       }
-    }         
+    }
 
     ros::spinOnce();
-    
-    updateRobotLocation();
 
+    updateRobotLocation();
 
     Mat safetyMap;
     // check if can rotate in-place there
-    if ( getSafetyMap(safetyMap) )
-    { 
-      cerr<<" check if robot can rotate in place  "<<endl;
-      bool canRotateInPlace = 
-        checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+    if (getSafetyMap(safetyMap))
+    {
+      cerr << " check if robot can rotate in place  " << endl;
+      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
       if (canRotateInPlace)
       {
-        cerr<<" robot is eable to rotate in place "<<endl;
-        //rotate the robot in-place numOfRounds times
-        if ( !rotateInPlace(numOfRounds)) // 
+        cerr << " robot is eable to rotate in place " << endl;
+        logManager_.writeToLog("robot is eable to rotate in place ");
+
+        // rotate the robot in-place numOfRounds times
+        if (!rotateInPlace(numOfRounds))  //
         {
           saveCoverageImg();
           setState("PERSON_DETECTED");
@@ -1122,22 +1149,22 @@ public:
         }
 
         cerr << " finish rotate-in-place, turn on the lamp" << endl;
+        logManager_.writeToLog(" finished rotate-in-place, turn on the lamp ");
 
         // turns on the lamp
         turnOnLamp();
         initializationGood_ = true;
         return true;
-
-      } 
-      else {
-        
-        cerr<<" cant rotate in 1 meter goal , try to find other goal "<<endl;
+      }
+      else
+      {
+        cerr << " cant rotate in 1 meter goal , try to find other goal " << endl;
         // THE Robot moved  forward but cant rotate-in-place
         // try to find other safe location for 360 deg
-        for (int trial = 0; trial < 3; trial ++) {
-
+        for (int trial = 0; trial < 3; trial++)
+        {
           if (exit_)
-          { 
+          {
             setState("USER_CTRL_C");
             saveCoverageImg();
             turnOffLamp();
@@ -1146,14 +1173,16 @@ public:
           }
 
           if (exitPerson_)
-          { 
+          {
             turnOffLamp();
             saveCoverageImg();
             setState("PERSON_DETECTED");
+            logManager_.writeToLog("PERSON_DETECTED");
+
             return false;
           }
-          
-          cerr<<" trial : "<<trial<<endl;
+
+          cerr << " trial : " << trial << endl;
           // find safe location on cost-map
           ros::spinOnce();
 
@@ -1163,24 +1192,24 @@ public:
           addDilationByGlobalCostMap(costMapImg_, initalizationMap, convertPoseToPix(robotPose_));
           addFreeSpaceDilation(initalizationMap);
           initalizationMap.at<uchar>(cv::Point(convertPoseToPix(robotPose_))) = 0;
-          
+
           Mat dist;
           Mat binary = initalizationMap.clone();
           binary.setTo(255, initalizationMap >= 254);
           binary.setTo(0, binary != 255);
           cv::distanceTransform(binary, dist, DIST_L2, 3);
 
-          float distThreshM = robot_w_m_ ;
+          float distThreshM = robot_w_m_;
           float minDist = 99999;
           cv::Point2d SafestGoalPix;
-          bool foundSafest  = false;
+          bool foundSafest = false;
 
-          cerr<<" distThreshM "<<distThreshM<<endl;
+          cerr << " distThreshM " << distThreshM << endl;
           Mat distGray;
           normalize(dist, distGray, 0, 1.0, NORM_MINMAX);
 
-          //try find a safe goal (the value of the pix in the dist map is bigger than distThreshM)
-          //next to robot aand also the closest one
+          // try find a safe goal (the value of the pix in the dist map is bigger than distThreshM)
+          // next to robot aand also the closest one
 
           for (int j = 0; j < binary.rows; j++)
           {
@@ -1192,32 +1221,33 @@ public:
               }
 
               float distM = dist.at<float>(j, i) * mapResolution_;
-  
-              if ( distM > distThreshM){
-                geometry_msgs::Quaternion q;
-                auto poseT = convertPixToPose(cv::Point2d(i ,j),q);
 
-                float dist = 
-                  goalCalculator.distanceCalculate(cv::Point2d(poseT.pose.position.x, poseT.pose.position.y),
-                  cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
-                
-                if ( dist < minDist){
-                  
+              if (distM > distThreshM)
+              {
+                geometry_msgs::Quaternion q;
+                auto poseT = convertPixToPose(cv::Point2d(i, j), q);
+
+                float dist = goalCalculator.distanceCalculate(
+                    cv::Point2d(poseT.pose.position.x, poseT.pose.position.y),
+                    cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
+
+                if (dist < minDist)
+                {
                   foundSafest = true;
                   minDist = dist;
-                  SafestGoalPix = cv::Point2d(i ,j);
+                  SafestGoalPix = cv::Point2d(i, j);
                 }
               }
             }
           }
 
-          if( !foundSafest){
-
+          if (!foundSafest)
+          {
             return false;
           }
 
-        
-          cerr<<" found other safe goal, send goal there "<<endl;
+          cerr << " found other safe goal, send goal there " << endl;
+          logManager_.writeToLog("found other safe goal, send goal there");
 
           // create goal (pose )
           auto q = tf::createQuaternionMsgFromYaw(robotHeading);
@@ -1226,7 +1256,7 @@ public:
           visualization_msgs::Marker marker;
           marker.header.frame_id = globalFrame_;
           marker.header.stamp = ros::Time::now();
-          marker.id = rand();     
+          marker.id = rand();
           marker.type = visualization_msgs::Marker::ARROW;
           marker.pose.position.x = nextGoal.pose.position.x;
           marker.pose.position.y = nextGoal.pose.position.y;
@@ -1246,43 +1276,43 @@ public:
 
           backward_goal_marker_pub_.publish(marker);
 
-
           bool result = sendGoal(nextGoal, -1, false, true);
 
           updateRobotLocation();
 
-          if (!result){              
+          if (!result)
+          {
+            float dist =
+                goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
+                                                 cv::Point2d(nextGoal.pose.position.x, nextGoal.pose.position.y));
 
-            float dist = 
-              goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
-              cv::Point2d(nextGoal.pose.position.x, nextGoal.pose.position.y));
-            
-            cerr<<" the dist to safe goal "<<dist<<endl;
-            if ( !(dist < 0.3)){
-              
-              cerr<<" the robot failed to reach the safe goal !! "<<" trial : "<<trial<<endl;
-              
-             
-              
+            cerr << " the dist to safe goal " << dist << endl;
+            if (!(dist < 0.3))
+            {
+              cerr << " the robot failed to reach the safe goal !! "
+                   << " trial : " << trial << endl;
+              logManager_.writeToLog("the robot failed to reach the safe goal !! trial" + to_string(trial));
+
               return false;
-            }            
-
+            }
           }
 
           // goal reached, check if can rotate in place
-          cerr<<"safe goal reached, check if can rotate in place "<<endl;
+          cerr << "safe goal reached, check if can rotate in place " << endl;
+          logManager_.writeToLog("safe goal reached, check if can rotate in place");
 
-
-          bool canRotateInPlace = 
-            checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+          bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
           if (canRotateInPlace)
           {
-            cerr<<" the robot is able to rotate in the safe goal "<<endl;
+            cerr << " the robot is able to rotate in the safe goal " << endl;
+            logManager_.writeToLog("the robot is able to rotate in the safe goal");
+
             // rotate the robot in-place numOfRounds times
             if (!rotateInPlace(numOfRounds))
             {
               cerr << " person detectd !!! " << endl;
+              logManager_.writeToLog(" person detectd !!!");
 
               turnOffLamp();
               saveCoverageImg();
@@ -1293,7 +1323,8 @@ public:
 
             // robot was able to rotate in place !!
 
-            cerr << " finish rotate-in-place, turn on the lamp" << endl;
+            cerr << " finished rotate-in-place, turn on the lamp" << endl;
+            logManager_.writeToLog("finished rotate-in-place, turn on the lamp");
 
             // TURN-N THE LIGHT
             turnOnLamp();
@@ -1301,22 +1332,23 @@ public:
             initializationGood_ = true;
 
             return true;
-          } 
-          else {
+          }
+          else
+          {
+            cerr << " the robot cant rotate in this safe goal "
+                 << " trial : " << trial << endl;
+            logManager_.writeToLog("the robot cant rotate in this safe goal, trial " + to_string(trial));
 
-            cerr<<" the robot cant rotate in this safe goal "<<" trial : "<<trial<<endl;
             continue;
           }
-
         }
-
       }
     }
     else
-    { 
-      cerr<<" error getting map "<<endl;
+    {
+      cerr << " error getting map " << endl;
       return false;
-    }    
+    }
 
     return false;
   }
@@ -1340,7 +1372,7 @@ public:
       }
 
       if (exit_)
-      { 
+      {
         saveCoverageImg();
         turnOffLamp();
         setState("USER_CTRL_C");
@@ -1348,7 +1380,7 @@ public:
       }
 
       if (exitPerson_)
-      { 
+      {
         turnOffLamp();
         saveCoverageImg();
         setState("PERSON_DETECTED");
@@ -1358,10 +1390,12 @@ public:
       switch (coverage_state_)
       {
         case COVERAGE_BY_STRAIGHT_LINES: {
-          cerr << " COVERAGE_BY_STRAIGHT_LINES " << endl;
+          cerr << "COVERAGE_BY_STRAIGHT_LINES " << endl;
+          logManager_.writeToLog("COVERAGE_BY_STRAIGHT_LINES");
+
           //   clearAllCostMaps();
 
-          currentAlgoMap_ = getCurrentMap();        
+          currentAlgoMap_ = getCurrentMap();
 
           // calculate goal-distance-transform-map
           cv::Mat distanceTransformImg;
@@ -1381,10 +1415,9 @@ public:
             break;
           }
 
-         
           // calc the gird coverage
           auto pathGrid = disantanceMapCoverage.getCoveragePath(currentAlgoMap_, currentPosition, goal,
-                                                            distanceTransformImg, getDistanceBetweenGoalsPix());
+                                                                distanceTransformImg, getDistanceBetweenGoalsPix());
 
           // convert the path into poses
           grid_poses_with_status_.setPixelsPath(pathGrid);
@@ -1394,13 +1427,15 @@ public:
           // exectute currnet navigation the blob-coverage
           cerr << "num of coverage waypoints " << grid_poses_with_status_.coveragePathPoses_.size() << " path_ size is "
                << pathGrid.size() << endl;
+          logManager_.writeToLog("num of coverage waypoints " +
+                                 to_string(grid_poses_with_status_.coveragePathPoses_.size()));
 
           bool coverage_done = false;
           float coveragePer = 0.0;
 
           vector<cv::Point2d> rejectedGoals;
           cerr << " Marks all the waypoints that the robot has already visited during EXPLORATION " << endl;
-          //Marks all the waypoints that the robot has already visited during EXPLORATION
+          // Marks all the waypoints that the robot has already visited during EXPLORATION
           markedWayPointsByExploration();
 
           while (!coverage_done && ros::ok())
@@ -1408,7 +1443,7 @@ public:
             ros::spinOnce();
 
             if (exit_)
-            { 
+            {
               setState("USER_CTRL_C");
               saveCoverageImg();
               turnOffLamp();
@@ -1416,14 +1451,13 @@ public:
             }
 
             if (exitPerson_)
-            { 
+            {
               turnOffLamp();
               saveCoverageImg();
               setState("PERSON_DETECTED");
               return;
             }
 
-           
             currentAlgoMap_ = getCurrentMap();
             updateRobotLocation();
 
@@ -1467,6 +1501,8 @@ public:
             if (!foundGoalByDirection)  // find next goal by connected-components algo
             {
               cerr << " try to finld goal by findNextGoalByConnetctedComponents ... " << endl;
+              logManager_.writeToLog("try to finld goal by findNextGoalByConnetctedComponents ... ");
+
               auto foundGoalByConnectedComponents = findNextGoalByConnetctedComponents(
                   finalGoalToNavigate, currentAlgoMap_, grid_poses_with_status_, distBetweenGoalsM_, mapResolution_);
 
@@ -1474,8 +1510,9 @@ public:
               if (foundGoalByConnectedComponents)
               {
                 cerr << " found goal by connected component !!" << endl;
+                logManager_.writeToLog("found goal by connected component !!");
 
-                /// calculate the goal 
+                /// calculate the goal
                 geometry_msgs::Quaternion q;
                 auto goalHeading = -1 * atan2(finalGoalToNavigate.y - robotPix.y, finalGoalToNavigate.x - robotPix.x);
                 tf2::Quaternion orientation;
@@ -1493,17 +1530,23 @@ public:
                 cerr << " resMakePlan " << resMakePlan << endl;
                 if (resMakePlan)
                 {
+                  logManager_.writeToLog("trobot was able to make plan to the connected component goal");
+
                   bool reverseDone = reverseLogic(wanted_path, nextGoal);
+ 
+                  logManager_.writeToLog("the reverse (backward to the safe goal) was down");
                   cerr << " reverseDone " << reverseDone << endl;
 
                   if (reverseDone)
                   {
                     continue;
                   }
-                } else {
+                }
+                else
+                { 
+                 logManager_.writeToLog("failed to make plan fo connectecd compoennet goal, mark it");
 
-                  
-                  cerr<<" failed to make plan fo connectecd compoennet goal, mark it "<<endl;
+                  cerr << " failed to make plan fo connectecd compoennet goal, mark it " << endl;
                   rejectedGoals.push_back(finalGoalToNavigate);
                   continue;
                 }
@@ -1513,8 +1556,10 @@ public:
 
                 // goal of connected component failed, marks this area as obstacle in algo map
                 if (!result)
-                { 
-                  cerr<<" failed to send goal connectecd compoennet "<<endl;
+                {
+                  cerr << " failed to send goal connectecd compoennet " << endl;
+                  logManager_.writeToLog("failed to send goal connectecd compoennet");
+
                   rejectedGoals.push_back(finalGoalToNavigate);
                 }
 
@@ -1523,13 +1568,15 @@ public:
                 {
                   Mat safetyMap;
                   // check if robot cant rotate in place, if so make small reverse
-                  if (getSafetyMap(safetyMap) )
+                  if (getSafetyMap(safetyMap))
                   {
-                    bool canRotateInPlace =
-                        checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+                    bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
                     if (!canRotateInPlace)
-                    {
+                    { 
+
+                      logManager_.writeToLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
+
                       smallReverseAllowed_ = true;
 
                       makeSmallReverse();
@@ -1537,19 +1584,23 @@ public:
                       smallReverseAllowed_ = false;
                     }
                   }
-                } 
+                }
 
                 continue;
               }
               else
               {
                 cerr << " failed to find by connected components " << endl;
+                logManager_.writeToLog("coverage_done: failed to find by connected components");
+
                 coverage_done = true;
                 break;
               }
             }
 
-            cerr<<" send the goal by direction only !!! "<<endl;
+            cerr << " send the goal by direction only !!! " << endl;
+            logManager_.writeToLog("send the goal by direction only !!!");
+
             // send the goal by direction only !!!
             percentCoverage_ = getCurrentPercentCoverage();
             node_.setParam("/coverage/percentage", percentCoverage_);
@@ -1571,19 +1622,25 @@ public:
             bool resMakePlan = makePlan(wanted_path, robotPose_, nextGoal);
             cerr << " resMakePlan " << resMakePlan << endl;
             if (resMakePlan)
-            {
+            { 
+              logManager_.writeToLog("trobot was able to make plan to the direction-goal");
+
               bool reverseDone = reverseLogic(wanted_path, nextGoal);
+              logManager_.writeToLog("the reverse (backward to the safe goal) was down");
+
               cerr << " reverseDone " << reverseDone << endl;
 
               if (reverseDone)
               {
                 continue;
               }
-            }  
-            else {
-
+            }
+            else
+            {
               // dont send the goal beacsue plan no valid!!
-              cerr<<" failed to make plan for direction goal, mark it "<<endl;
+              logManager_.writeToLog(" failed to make plan for direction goal, mark it");
+
+              cerr << " failed to make plan for direction goal, mark it " << endl;
               grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
               continue;
             }
@@ -1595,13 +1652,14 @@ public:
             {
               Mat safetyMap;
               // check if robot cant rotate in place, if so make small reverse
-              if (getSafetyMap(safetyMap) )
+              if (getSafetyMap(safetyMap))
               {
-                bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, 
-                  robot_w_m_, robot_h_m_, 0, 0.2);
+                bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
 
                 if (!canRotateInPlace)
-                {
+                { 
+                 logManager_.writeToLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
+
                   smallReverseAllowed_ = true;
                   makeSmallReverse();
 
@@ -1619,6 +1677,8 @@ public:
 
         case BACK_TO_STARTING_LOCATION: {
           cerr << " BACK_TO_STARTING_LOCATION : " << startingLocation_ << " : " << countNumberOfTriesFinsihGoal << endl;
+
+          logManager_.writeToLog("BACK_TO_STARTING_LOCATION");
 
           if (countNumberOfTriesFinsihGoal > 3)
           {
@@ -1665,7 +1725,6 @@ public:
           }
         }
         case COVERAGE_DONE: {
-          
           cerr << " COVERAGE_DONE " << endl;
 
           lampTimer_.stop();
@@ -1676,13 +1735,10 @@ public:
 
           coverage_state_ = COVERAGE_DONE;
 
-                  
-
           break;
         }
 
         case ERROR_COVERAGE: {
-
           lampTimer_.stop();
 
           if (!errCoverage_)
@@ -1696,22 +1752,22 @@ public:
           coverage_state_ = ERROR_COVERAGE;
 
           if (exit_)
-          { 
+          {
             saveCoverageImg();
             turnOffLamp();
 
             setState("USER_CTRL_C");
             return;
-          }     
+          }
 
           if (exitPerson_)
-          { 
+          {
             turnOffLamp();
             saveCoverageImg();
             setState("PERSON_DETECTED");
 
-            return ;
-          }    
+            return;
+          }
 
           break;
         }
@@ -1723,20 +1779,15 @@ public:
   {
     cerr << " user pressed CTRL+C " << endl;
     exit_ = true;
-   
-
   }
 
-  
-
 private:
+  void updateTimerCallback(const ros::TimerEvent&)
+  {
+    // if coverage done
 
-  void updateTimerCallback(const ros::TimerEvent&) {
-    
-    //if coverage done
-
-    if (coverage_state_ == COVERAGE_DONE) {
-
+    if (coverage_state_ == COVERAGE_DONE)
+    {
       turnOffLamp();
 
       return;
@@ -1744,16 +1795,16 @@ private:
 
     // if we are still in  INITIALIZATION, do nothing
 
-    if( (state_ ==  "INITIALIZATION" || state_ == "IDLE" || !initializationGood_)  ) {
-
+    if ((state_ == "INITIALIZATION" || state_ == "IDLE" || !initializationGood_))
+    {
       return;
     }
 
-    // in coverage/ exploration  
+    // in coverage/ exploration
 
-    if( detectedPerson_ ) {
-
-      cerr<<" PERSON_DETECTED "<<endl;
+    if (detectedPerson_)
+    {
+      cerr << " PERSON_DETECTED " << endl;
 
       setState("PERSON_DETECTED");
 
@@ -1764,18 +1815,15 @@ private:
       exitPerson_ = true;
 
       return;
-
-      
-    } else if ( initializationGood_ ) {
-      
+    }
+    else if (initializationGood_)
+    {
       turnOnLamp();
 
       return;
     }
-    
+
     turnOffLamp();
-
-
   }
   void clearAllCostMaps()
   {
@@ -1808,7 +1856,6 @@ private:
     if (client.call(srv))
     {
       cerr << " plan size " << srv.response.plan.poses.size() << endl;
-     
 
       path = srv.response.plan;
 
@@ -1864,7 +1911,6 @@ private:
     line_strip.id = 6000;
     line_strip.lifetime = ros::Duration(1.0);
 
-
     line_strip.type = visualization_msgs::Marker::LINE_STRIP;
 
     if (smallReverseAllowed_)
@@ -1917,7 +1963,7 @@ private:
     // cerr << direc << endl;
 
     cv::Mat workMap = imgMap.clone();
-   
+
     // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
 
     float robot_W_pix = robot_w_m / mapResolution_;
@@ -2051,32 +2097,24 @@ private:
       robotPose_.pose.orientation.z = transform.getRotation().z();
       robotPose_.pose.orientation.w = transform.getRotation().w();
 
-      if ( !(state_ ==  "INITIALIZATION" || state_ == "IDLE") ) { 
-
+      if (!(state_ == "INITIALIZATION" || state_ == "IDLE"))
+      {
         if (robotHistoryPathMsg_.poses.size() > 0)
-        { 
+        {
           int last_index = robotHistoryPathMsg_.poses.size() - 1;
 
-          float diffLocationsM = goalCalculator.distanceCalculate(
-              cv::Point2d(robotHistoryPathMsg_.poses[last_index].pose.position.x,
-                          robotHistoryPathMsg_.poses[last_index].pose.position.y),
-              cv::Point2d(robotPose_.pose.position.x, 
-                        robotPose_.pose.position.y));
+          float diffLocationsM =
+              goalCalculator.distanceCalculate(cv::Point2d(robotHistoryPathMsg_.poses[last_index].pose.position.x,
+                                                           robotHistoryPathMsg_.poses[last_index].pose.position.y),
+                                               cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y));
 
           if (diffLocationsM > 0.05)
           {
-            
             robotHistoryPathMsg_.poses.push_back(robotPose_);
-            publishSanitizationRadius();            
-
-          } 
+            publishSanitizationRadius();
+          }
         }
-
-
-       
-
       }
-
 
       return true;
     }
@@ -2186,8 +2224,6 @@ private:
     return percentCoverage;
   }
 
- 
-
   void publishRobotHistoryPath()
   {
     robotHistoryPathMsg_.header.stamp = ros::Time::now();
@@ -2200,22 +2236,19 @@ private:
   {
     if (msg->data == true)
     {
-      detectedPerson_ = true;      
-    } 
-   
+      detectedPerson_ = true;
+    }
   }
 
-  void odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
-
+  void odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
+  {
     currOdom_.child_frame_id = msg->child_frame_id;
     currOdom_.header = msg->header;
     currOdom_.pose = msg->pose;
     currOdom_.twist = msg->twist;
-
   }
   void cameraScanCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
-  { 
-
+  {
     updateRobotLocation();
 
     for (double i = 0; i < scan->ranges.size(); i++)
@@ -2231,7 +2264,6 @@ private:
 
         auto transformedRayPoint = transformFrames(p, globalFrame_, scan->header.frame_id, scan->header.stamp);
 
-
         float dist =
             goalCalculator.distanceCalculate(cv::Point2d(robotPose_.pose.position.x, robotPose_.pose.position.y),
                                              cv::Point2d(transformedRayPoint.point.x, transformedRayPoint.point.y));
@@ -2240,7 +2272,6 @@ private:
         {  // M{
 
           cameraScanObstacles.push_back(transformedRayPoint);
-
         }
 
         // int n_digit = 1;
@@ -2267,12 +2298,11 @@ private:
   }
 
   bool getSafetyMap(Mat& saftetyMap)
-  { 
-   
+  {
     auto robotBaseFootPrint = convertPoseToPix(robotPose_);
 
-    if (!costMapImg_.data || robotBaseFootPrint.x < 0 || robotBaseFootPrint.y < 0 
-      || !currentGlobalMap_.data || !initSlamMap_)
+    if (!costMapImg_.data || robotBaseFootPrint.x < 0 || robotBaseFootPrint.y < 0 || !currentGlobalMap_.data ||
+        !initSlamMap_)
     {
       cerr << " failed to get safey map " << endl;
       return false;
@@ -2283,7 +2313,7 @@ private:
 
     cv::Point2d mapCenter(currentGlobalMap_.cols / 2, currentGlobalMap_.rows / 2);
     cv::Point2d costMapCenter(globalCostMap.cols / 2, globalCostMap.rows / 2);
-   
+
     int deltaRobotX = mapCenter.x - robotBaseFootPrint.x;
     int deltaRobotY = mapCenter.y - robotBaseFootPrint.y;
 
@@ -2295,7 +2325,7 @@ private:
         {
           int value = globalCostMap.at<uchar>(y, x);
 
-          if (value == 255) // not infalted
+          if (value == 255)  // not infalted
           {
             cv::Point2d nP(x + (mapCenter.x - costMapCenter.x) - deltaRobotX,
                            y + (mapCenter.y - costMapCenter.y) - deltaRobotY);
@@ -2310,7 +2340,6 @@ private:
 
       // imwrite("/home/yakir/distance_transform_coverage_ws/saftetyMap.png", saftetyMap);
 
-
       return true;
     }
     catch (cv::Exception& e)
@@ -2322,28 +2351,18 @@ private:
 
     // try
     // {
-      
 
     //   if (initSlamMap_ && initGlobalCostMap_ && mappingMap_.data && currentGlobalMap_.data)
     //   {
     //     saftetyMap = cv::Mat(currentGlobalMap_.rows, currentGlobalMap_.cols, CV_8UC1, cv::Scalar(205));
 
-
-        
-
-        
-
-       
-
-
-
     //     return true;
-    //   } 
+    //   }
     //   else {
 
     //     cerr<<" initSlamMap_ "<<initSlamMap_<<" initGlobalCostMap_ "<<initGlobalCostMap_<<
     //       " mappingMap_.data "<<mappingMap_.data<<" currentGlobalMap_.data "<<currentGlobalMap_.data<<endl;
-    //     return false;  
+    //     return false;
     //   }
     // }
     // catch (cv::Exception& e)
@@ -2752,15 +2771,14 @@ private:
 
           if (value == 100)
           {
-            costMapImg_.at<uchar>(j, i) = 255; ///
+            costMapImg_.at<uchar>(j, i) = 255;  ///
           }
           else if (value > 0 && value < 100)
           {
-            costMapImg_.at<uchar>(j, i) = 100; // inflation
+            costMapImg_.at<uchar>(j, i) = 100;  // inflation
           }
         }
       }
-
 
       initGlobalCostMap_ = true;
 
@@ -2986,7 +3004,7 @@ private:
 
       }  /// COVERED_BY_ROBOT_PATH = LIGHT BLUE
       else if (grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH)
-      { 
+      {
         int r, g, b;
         sscanf(COVERED_BY_ROBOT_PATH_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
         m.color.r = r / 255.0;
@@ -3405,10 +3423,8 @@ private:
     return "";
   }
 
-  bool sendGoal(const geometry_msgs::PoseStamped& goalMsg, int goalIndex = -1, 
-    bool in_explore = false, 
-    bool in_initialization = false,
-    bool in_reverse = false)
+  bool sendGoal(const geometry_msgs::PoseStamped& goalMsg, int goalIndex = -1, bool in_explore = false,
+                bool in_initialization = false, bool in_reverse = false)
   {
     // navigate to the point
     moveBaseController_.navigate(goalMsg);
@@ -3420,13 +3436,13 @@ private:
       ros::spinOnce();
 
       if (exit_)
-      { 
+      {
         setState("USER_CTRL_C");
         return false;
       }
 
       if (exitPerson_)
-      { 
+      {
         turnOffLamp();
         setState("PERSON_DETECTED");
         return false;
@@ -3440,9 +3456,9 @@ private:
 
       publishWaypointsWithStatus();
 
-      if (show_live_video_){
+      if (show_live_video_)
+      {
         showLiveVideo(goalMsg, in_explore);
-
       }
 
       // if we already very close to the goal
@@ -3495,9 +3511,8 @@ private:
           moveBaseController_.moveBaseClient_.cancelGoal();
           return true;
         }
-      }      
+      }
 
-      
       moveBaseController_.moveBaseClient_.waitForResult(ros::Duration(0.1));
       auto move_base_state = moveBaseController_.moveBaseClient_.getState();
 
@@ -3530,12 +3545,11 @@ private:
     return result;
   }
 
-  void showLiveVideo(const geometry_msgs::PoseStamped& goalMsg,
-    bool in_explore = false){
-
+  void showLiveVideo(const geometry_msgs::PoseStamped& goalMsg, bool in_explore = false)
+  {
     // try {
 
-    //   if ( (state_ ==  "INITIALIZATION" || state_ == "IDLE") ) { 
+    //   if ( (state_ ==  "INITIALIZATION" || state_ == "IDLE") ) {
 
     //     return;
     //   }
@@ -3548,25 +3562,26 @@ private:
     //     // cvtColor(patternImg, patternImg, COLOR_GRAY2BGR);
     //     cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
 
-    
-
     //     // draw the grid
     //     for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
     //     {
     //       if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
     //       {
-    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 0, 255),
+    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 0,
+    //         255),
     //               -1, 8, 0);
     //       }
     //       else if (grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ||
     //               grid_poses_with_status_.status_[i] == REJECTED)
     //       {
-    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(255, 0, 0),
+    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(255, 0,
+    //         0),
     //               -1, 8, 0);
     //       }
     //       else if (grid_poses_with_status_.status_[i] == UN_COVERED)
     //       {
-    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 255, 0),
+    //         circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(0, 255,
+    //         0),
     //               -1, 8, 0);
     //       }
     //     }
@@ -3578,9 +3593,9 @@ private:
     //       cv::Point p2 = convertPoseToPix(robotHistoryPathMsg_.poses[i + 1]);
 
     //       if( in_explore){
-    //                   cv::line(robotTreaceImg, p1, p2, Scalar(0, 0, 0), 1);  
+    //                   cv::line(robotTreaceImg, p1, p2, Scalar(0, 0, 0), 1);
     //       }
-    //       else 
+    //       else
     //       {
     //         cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 255), 1);
 
@@ -3589,7 +3604,7 @@ private:
 
     //     //draw robot pose
     //     circle(robotTreaceImg,
-    //      convertPoseToPix(robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size()-1]), 
+    //      convertPoseToPix(robotHistoryPathMsg_.poses[robotHistoryPathMsg_.poses.size()-1]),
     //       3, Scalar(0, 0, 0),
     //               -1, 8, 0);
 
@@ -3600,9 +3615,9 @@ private:
     //     // imshow("robotTreaceImg",robotTreaceImg);
     //     // waitKey(1);
 
-    //     sensor_msgs::ImagePtr msg = 
+    //     sensor_msgs::ImagePtr msg =
     //     cv_bridge::CvImage(std_msgs::Header(), "bgr8", robotTreaceImg).toImageMsg();
-    
+
     //     liveMapPub_.publish(msg);
     //   }
 
@@ -3612,16 +3627,17 @@ private:
     //   const char* err_msg = e.what();
     //   std::cerr << "exception caught: " << err_msg << std::endl;
     // }
-    
-
   }
   void saveCoverageImg()
   {
     if (!imgSaved_ && mappingMap_.data)
-    {
+    { 
+
+      logManager_.writeToLog("saveCoverageImg");
+
       Mat robotTreaceImg = mappingMap_.clone();
 
-      cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);     
+      cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
 
       // put back the black and the gray color to the map
       for (int j = 0; j < mappingMap_.rows; j++)
@@ -3649,32 +3665,32 @@ private:
       for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
       {
         if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
-        { 
+        {
           int r, g, b;
           sscanf(COVERED_BY_OBSTACLE_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(b,g,r)/*Scalar(0, 0, 255)*/,
-                 -1, 8, 0);
+          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                 Scalar(b, g, r) /*Scalar(0, 0, 255)*/, -1, 8, 0);
         }
         else if (grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH)
-        { 
+        {
           int r, g, b;
           sscanf(COVERED_BY_ROBOT_PATH_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(b,g,r)/*Scalar(255, 0, 0)*/,
-                 -1, 8, 0);
+          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                 Scalar(b, g, r) /*Scalar(255, 0, 0)*/, -1, 8, 0);
         }
         else if (grid_poses_with_status_.status_[i] == UN_COVERED)
-        { 
+        {
           int r, g, b;
           sscanf(UN_COVERED_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(b,g,r)/*Scalar(0, 255, 0)*/,
-                 -1, 8, 0);
+          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                 Scalar(b, g, r) /*Scalar(0, 255, 0)*/, -1, 8, 0);
         }
         else if (grid_poses_with_status_.status_[i] == REJECTED)
-        { 
-           int r, g, b;
+        {
+          int r, g, b;
           sscanf(REJECTED_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1, Scalar(b,g,r)/*Scalar(0, 165, 255)*/,
-                 -1, 8, 0);
+          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                 Scalar(b, g, r) /*Scalar(0, 165, 255)*/, -1, 8, 0);
         }
       }
 
@@ -3686,7 +3702,7 @@ private:
 
         cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 255), 1);
       }
-     
+
       auto end = high_resolution_clock::now();
       auto durationCoverage = duration_cast<seconds>(end - startingCoverageTime_);
 
@@ -3701,7 +3717,7 @@ private:
       cerr << "full_img_name: " << full_img_name << endl;
 
       cv::imwrite(full_img_name, robotTreaceImg);
-      //save to nimbus-cloud
+      // save to nimbus-cloud
       cv::imwrite("/var/lib/nimbus/records/" + image_name_format + ".png", robotTreaceImg);
 
       imgSaved_ = true;
@@ -3828,32 +3844,31 @@ private:
 
     float prevAngle = 0.0;
 
-    cerr<<" start to rotate "<<numOfRounds<<" rounds "<<endl;
+    cerr << " start to rotate " << numOfRounds << " rounds " << endl;
 
     while (ros::ok())
     {
       updateRobotLocation();
 
       if (exit_)
-      { 
+      {
         setState("USER_CTRL_C");
         return false;
       }
-      
+
       if (exitPerson_)
-      { 
+      {
         turnOffLamp();
         setState("PERSON_DETECTED");
         return false;
       }
 
-      float currDeg =
-          angles::to_degrees(atan2((2.0 * (currOdom_.pose.pose.orientation.w * currOdom_.pose.pose.orientation.z +
-                                           currOdom_.pose.pose.orientation.x * currOdom_.pose.pose.orientation.y)),
-                                   (1.0 - 2.0 * (currOdom_.pose.pose.orientation.y * currOdom_.pose.pose.orientation.y +
-                                    currOdom_.pose.pose.orientation.z * currOdom_.pose.pose.orientation.z))));
-       
-      
+      float currDeg = angles::to_degrees(
+          atan2((2.0 * (currOdom_.pose.pose.orientation.w * currOdom_.pose.pose.orientation.z +
+                        currOdom_.pose.pose.orientation.x * currOdom_.pose.pose.orientation.y)),
+                (1.0 - 2.0 * (currOdom_.pose.pose.orientation.y * currOdom_.pose.pose.orientation.y +
+                              currOdom_.pose.pose.orientation.z * currOdom_.pose.pose.orientation.z))));
+
       // init
       if (iteration == 0)
       {
@@ -3924,21 +3939,17 @@ private:
     return true;
   }
 
-  
-
-  void turnOnLamp(){
-    
+  void turnOnLamp()
+  {
     std_msgs::Bool msg;
     msg.data = true;
     uv_lamp_set_state_pub_.publish(msg);
   }
 
 public:
-
   bool initializationGood_ = false;
 
 private:
-
   COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE_BY_STRAIGHT_LINES;
 
   EXPLORE_STATE explore_state_ = EXPLORE_STATE::IDLE;
@@ -3957,7 +3968,7 @@ private:
 
   ros::Subscriber is_person_detected_sub_;
 
-  //timer 
+  // timer
 
   ros::Timer lampTimer_;
 
@@ -3972,7 +3983,7 @@ private:
   ros::Publisher waypoints_with_status_pub_;
 
   ros::Publisher directions_marker_array_pub_;
-  
+
   ros::Publisher uv_lamp_set_state_pub_;
 
   image_transport::Publisher coverage_map_pub_;
@@ -3985,7 +3996,6 @@ private:
   ros::Publisher backward_goal_marker_pub_;
 
   image_transport::Publisher liveMapPub_;
-
 
   // classes
 
@@ -4104,11 +4114,13 @@ private:
 
   vector<geometry_msgs::PointStamped> cameraScanObstacles;
 
-  string COVERED_BY_OBSTACLE_COLOR;  
+  // log-manager
+  LogManager logManager_;
+
+  string COVERED_BY_OBSTACLE_COLOR;
   string COVERED_BY_ROBOT_PATH_COLOR;
   string UN_COVERED_COLOR;
   string REJECTED_COLOR;
-
 };
 
 int main(int argc, char** argv)
@@ -4120,14 +4132,14 @@ int main(int argc, char** argv)
   signal(SIGINT, (void (*)(int))MapCoverageManager::mySigintHandler);
 
   if (mapCoverageManager.initialization())
-  {    
+  {
     if (mapCoverageManager.explore())
     {
       mapCoverageManager.coverage();
     }
-  } else
-  { 
-
+  }
+  else
+  {
     mapCoverageManager.turnOffLamp();
     mapCoverageManager.setState("INITIALIZATION_ERROR");
     cerr << " initialization failed  " << endl;
