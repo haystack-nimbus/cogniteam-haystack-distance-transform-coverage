@@ -156,6 +156,7 @@ struct Path_with_Status
   }
 };
 
+ 
 string getCurrentTime()
 {
   time_t rawtime;
@@ -1026,6 +1027,8 @@ public:
     if (exit_)
     {
       setState("USER_CTRL_C");
+      logManager_.writeToLog("USER_CTRL_C");
+
       saveCoverageImg();
       return false;
     }
@@ -1034,6 +1037,8 @@ public:
     {
       saveCoverageImg();
       setState("PERSON_DETECTED");
+      logManager_.writeToLog("PERSON_DETECTED");
+
       return false;
     }
 
@@ -1144,6 +1149,7 @@ public:
         {
           saveCoverageImg();
           setState("PERSON_DETECTED");
+          logManager_.writeToLog("PERSON_DETECTED");
           cerr << " person detectd !!! " << endl;
           return false;
         }
@@ -3846,6 +3852,9 @@ private:
 
     cerr << " start to rotate " << numOfRounds << " rounds " << endl;
 
+    logManager_.writeToLog("start to rotate  1 round");
+
+
     while (ros::ok())
     {
       updateRobotLocation();
@@ -3853,6 +3862,8 @@ private:
       if (exit_)
       {
         setState("USER_CTRL_C");
+        logManager_.writeToLog("USER_CTRL_C");
+
         return false;
       }
 
@@ -3860,6 +3871,8 @@ private:
       {
         turnOffLamp();
         setState("PERSON_DETECTED");
+        logManager_.writeToLog("rotateInPlace func: PERSON_DETECTED");
+
         return false;
       }
 
