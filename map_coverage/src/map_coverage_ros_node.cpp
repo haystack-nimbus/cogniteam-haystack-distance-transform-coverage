@@ -411,7 +411,7 @@ public:
         case IDLE: {
           cerr << "IDLE " << endl;
 
-          startingTime_ = getCurrentTime();
+          //startingTime_ = getCurrentTime();
 
           // set the global starting location
           startingLocation_ = robotPose_;
@@ -976,8 +976,8 @@ public:
   {
     int secondsIdle = 5;
 
-    float mForward = 0.7;
-
+    float mForward = 0.7; 
+    startingTime_ = getCurrentTime();
     node_.setParam("/coverage/state", "IDLE");
     state_ = "IDLE";
 
@@ -3699,8 +3699,10 @@ private:
                  Scalar(b, g, r) /*Scalar(0, 165, 255)*/, -1, 8, 0);
         }
       }
-
+      std::cerr << "111111" << std::endl;
       // draw the trace only
+      if (!(state_ == "INITIALIZATION" || state_ == "IDLE"))
+      {
       for (int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++)
       {
         cv::Point p1 = convertPoseToPix(robotHistoryPathMsg_.poses[i]);
@@ -3708,7 +3710,8 @@ private:
 
         cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 255), 1);
       }
-
+      }
+      std::cerr << "222222" << std::endl;
       auto end = high_resolution_clock::now();
       auto durationCoverage = duration_cast<seconds>(end - startingCoverageTime_);
 
@@ -3961,6 +3964,7 @@ private:
 
 public:
   bool initializationGood_ = false;
+  string state_ = "INITIALIZING";
 
 private:
   COVERAGE_STATE coverage_state_ = COVERAGE_STATE::COVERAGE_BY_STRAIGHT_LINES;
@@ -4107,7 +4111,7 @@ private:
 
   string image_name_ = "";
 
-  string state_ = "INITIALIZING";
+ // string state_ = "INITIALIZING";
 
   bool detectedPerson_ = false;
 
@@ -4153,12 +4157,15 @@ int main(int argc, char** argv)
   }
   else
   {
+	  if (mapCoverageManager.state_ != "PERSON_DETECTED" && mapCoverageManager.state_ != "USER_CTRL_C"){
+
     mapCoverageManager.turnOffLamp();
     mapCoverageManager.setState("INITIALIZATION_ERROR");
     cerr << " initialization failed  " << endl;
+	  }
   }
 
-  ros::spin();
+  //ros::spin();
 
   return 0;
 }
