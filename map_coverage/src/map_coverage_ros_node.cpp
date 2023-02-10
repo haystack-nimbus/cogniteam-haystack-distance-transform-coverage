@@ -974,7 +974,7 @@ public:
 
   bool initialization()
   {
-    int secondsIdle = 5;
+    int secondsIdle = 30;
 
     float mForward = 0.7; 
     startingTime_ = getCurrentTime();
@@ -3699,9 +3699,9 @@ private:
                  Scalar(b, g, r) /*Scalar(0, 165, 255)*/, -1, 8, 0);
         }
       }
-      std::cerr << "111111" << std::endl;
+      std::cerr << "111111" << state_ <<std::endl;
       // draw the trace only
-      if (!(state_ == "INITIALIZATION" || state_ == "IDLE"))
+      if (!(state_ == "INITIALIZATION" || state_ == "IDLE" || state_ == "INITIALIZATION_ERROR"))
       {
       for (int i = 0; i < robotHistoryPathMsg_.poses.size() - 1; i++)
       {
