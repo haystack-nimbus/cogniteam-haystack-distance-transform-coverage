@@ -516,7 +516,7 @@ public:
             // check if robot cant rotate in place, if so make small reverse
             if (getSafetyMap(safetyMap) && safetyMap.data)
             {
-              bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+              bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
               if (!canRotateInPlace)
               {
@@ -708,7 +708,7 @@ public:
         return false;  /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
       }
 
-      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
       if (!canRotateInPlace)
       {
@@ -1152,7 +1152,7 @@ public:
     if (getSafetyMap(safetyMap))
     {
       cerr << " check if robot can rotate in place  " << endl;
-      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+      bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
       if (canRotateInPlace)
       {
@@ -1322,7 +1322,7 @@ public:
           cerr << "safe goal reached, check if can rotate in place " << endl;
           logManager_.writeToLog("safe goal reached, check if can rotate in place");
 
-          bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+          bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
           if (canRotateInPlace)
           {
@@ -1613,7 +1613,7 @@ public:
                   // check if robot cant rotate in place, if so make small reverse
                   if (getSafetyMap(safetyMap))
                   {
-                    bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+                    bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
                     if (!canRotateInPlace)
                     { 
@@ -1719,7 +1719,7 @@ public:
               // check if robot cant rotate in place, if so make small reverse
               if (getSafetyMap(safetyMap))
               {
-                bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.2);
+                bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
                 if (!canRotateInPlace)
                 { 
