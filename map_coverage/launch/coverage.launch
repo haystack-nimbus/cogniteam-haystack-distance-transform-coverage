@@ -2,10 +2,10 @@
 
     <arg name="distance_between_goals_m" default="0.1" />  
     <arg name="walls_inflation_m" default="0.3" />  
-    <arg name="robot_w_m" default="0.53" />  
-    <arg name="robot_h_m" default="0.53" />  
+    <arg name="robot_w_m" default="0.50" />  
+    <arg name="robot_h_m" default="0.50" />  
 
-    <arg name="sanitization_radius" default="0.7" />  
+    <arg name="sanitization_radius" default="0.5" />  
 
     <arg name="path_deg_angle_threshold" default="30.0" />  
     
