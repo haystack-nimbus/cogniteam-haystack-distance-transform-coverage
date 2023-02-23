@@ -295,6 +295,9 @@ public:
 
     backward_goal_marker_pub_ = node_.advertise<visualization_msgs::Marker>("/backward_goal", 10);
 
+    direction_or_component_goal_pub_ = node_.advertise<visualization_msgs::Marker>("/direction_component_goal", 10);
+
+
     uv_lamp_set_state_pub_ = node_.advertise<std_msgs::Bool>("/uv_lamp_set_state", 10);
 
     initSlamMap_ = false;
@@ -889,6 +892,8 @@ public:
     if (distFromStatingPointM < 0.15)
     {
       cerr << " the robot is very close to the starting location, so it probably can rotate" << endl;
+      logManager_.writeToLog("the robot is very close to the starting location, so it probably can rotate");
+
       return true;
     }
 
@@ -939,9 +944,9 @@ public:
 
     for (int deg = 0; deg < 360; deg++)
     {
-      // Mat dbg = sefetyMap.clone();
-      // cvtColor(dbg, dbg, COLOR_GRAY2BGR);
-      // cv::arrowedLine(dbg, robotPix, robotHeadingPoint, Scalar(80, 127, 255), 2, 8, 0, 0.3);
+      Mat dbg = sefetyMap.clone();
+      cvtColor(dbg, dbg, COLOR_GRAY2BGR);
+      cv::arrowedLine(dbg, robotPix, robotHeadingPoint, Scalar(80, 127, 255), 2, 8, 0, 0.3);
 
       float wanted_angle = deg;
       for (int i = 0; i < footprintPoints.size(); i++)
@@ -950,11 +955,21 @@ public:
         rot.x = rot.x + cneterOfRotationPix.x;
         rot.y = rot.y + cneterOfRotationPix.y;
 
-        // circle(dbg, rot, 1, Scalar(255, 0, 50), -1, 8, 0);
+        circle(dbg, rot, 1, Scalar(255, 0, 50), -1, 8, 0);
 
+        // try to find collision
         if (sefetyMap.at<uchar>(rot.y, rot.x) == 0)
         {
-          // circle(dbg, rot , 1, Scalar(0,0,255), -1, 8, 0);
+          circle(dbg, rot , 1, Scalar(0,0,255), -1, 8, 0);
+
+          circle(dbg, robotPix , 1, Scalar(255,0,0), -1, 8, 0);
+          circle(dbg, cneterOfRotationPix , 1, Scalar(0,255,255), -1, 8, 0);
+
+          cv::resize(dbg, dbg, cv::Size(dbg.cols * 4, dbg.rows * 4));
+
+          cv::imwrite("/var/lib/nimbus/records/last_collision.png",dbg);
+        
+          logManager_.writeToLog("found collison!");
 
           return false;
         }
@@ -1622,6 +1637,28 @@ public:
             q.z = orientation.getZ();
 
             auto nextGoal = convertPixToPose(finalGoalToNavigate, q);
+
+            visualization_msgs::Marker marker_direction_goal;
+            marker_direction_goal.header.frame_id = globalFrame_;
+            marker_direction_goal.header.stamp = ros::Time::now();
+            marker_direction_goal.id = rand();
+            marker_direction_goal.type = visualization_msgs::Marker::SPHERE;
+            marker_direction_goal.pose.position.x = nextGoal.pose.position.x;
+            marker_direction_goal.pose.position.y = nextGoal.pose.position.y;
+            marker_direction_goal.pose.position.z = 0.5;
+            marker_direction_goal.pose.orientation.x = nextGoal.pose.orientation.x;
+            marker_direction_goal.pose.orientation.y = nextGoal.pose.orientation.y;
+            marker_direction_goal.pose.orientation.z = nextGoal.pose.orientation.z;
+            marker_direction_goal.pose.orientation.w = nextGoal.pose.orientation.w;
+            marker_direction_goal.scale.x = 0.3;
+            marker_direction_goal.scale.y = 0.3;
+            marker_direction_goal.scale.z = 0.3;
+            marker_direction_goal.color.a = 1.0;  // Don't forget to set the alpha!
+            marker_direction_goal.color.r = 0.0;
+            marker_direction_goal.color.g = 0.5;
+            marker_direction_goal.color.b = 0.5;
+            marker_direction_goal.lifetime = ros::Duration(10.0);
+            direction_or_component_goal_pub_.publish(marker_direction_goal);
 
             /// calculate wanted path
             nav_msgs::Path wanted_path;
@@ -2570,10 +2607,13 @@ private:
       return false;
     }
 
-    cerr << "maxScore " << maxScore << endl;
+    cerr << "maxScore " << maxScore << endl;  
+    logManager_.writeToLog("maxScore" + to_string(maxScore));
+
 
     if (maxScore > score_threshold)
     {
+
       return true;
     }
 
@@ -3959,7 +3999,7 @@ private:
   {
     std_msgs::Bool msg;
     msg.data = true;
-    uv_lamp_set_state_pub_.publish(msg);
+    // uv_lamp_set_state_pub_.publish(msg);
   }
 
 public:
@@ -4008,6 +4048,7 @@ private:
   ros::Publisher sanitization_radius_marker_pub_;
 
   ros::Publisher robot_history_path_pub_;
+  ros::Publisher direction_or_component_goal_pub_;
   nav_msgs::Path robotHistoryPathMsg_;
 
   ros::Publisher backward_goal_marker_pub_;
