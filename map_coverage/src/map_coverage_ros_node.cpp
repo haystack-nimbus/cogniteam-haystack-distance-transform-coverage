@@ -108,6 +108,8 @@ using namespace std;
 #include "../include/MoveBaseController.h"
 #include "../include/logManger.h"
 
+#define CONFIG_USE_G_COST_MAP_AS_IT_IS (1)
+
 geometry_msgs::PoseStamped startingLocation_;
 string startingTime_;
 
@@ -2928,11 +2930,15 @@ private:
         {
           // if inside radius but last time int was inside obstacle,
           // keep it as obstacle
-          if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
+
+#ifndef CONFIG_USE_G_COST_MAP_AS_IT_IS
+	  // Keep the obstacle if the compile time directive is to not use the Cost map as it is
+	  if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
           {
             grid_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
           }
           else
+#endif
           {
             grid_poses_with_status_.setStatByIndex(i, UN_COVERED);
           }
