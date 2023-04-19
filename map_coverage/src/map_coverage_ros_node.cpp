@@ -528,10 +528,10 @@ public:
         }
 
         // the robot was able to calculate path to this goal witout reverse logic
-        cerr << " sending goal to the next froniter pix " << currentEdgesFrontiers[0].center << endl;
+        cerr << " sending goal NO REVERSE to the next froniter pix " << currentEdgesFrontiers[0].center << endl;
         logManager_.writeToLog("sending goal to the next froniter pix: " 
           + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
-        publishLog("sending goal to the next froniter pix: " 
+        publishLog("sending goal NO REVERSE to the next froniter pix: " 
           + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
   
 
@@ -746,9 +746,9 @@ public:
     /// THE path IS BEHIND THE ROBOT !!!!!!!
     if ((diffAngles) > path_deg_angle_threshold_)
     {
-      cerr << " the path is behind the robot !! " << endl;
-      logManager_.writeToLog("the path is behind the robot !!");
-      publishLog("the path is behind the robot !!");
+      // cerr << " the path is behind the robot !! " << endl;
+      // logManager_.writeToLog("the path is behind the robot !!");
+      // publishLog("the path is behind the robot !!");
 
 
       cv::Mat safetyMap;
@@ -877,7 +877,9 @@ public:
                 publishLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
               }             
 
-
+              logManager_.writeToLog("disableReverse");
+              publishLog("disableReverse");
+              
               disableReverse();
               return true;
             }
@@ -928,7 +930,8 @@ public:
           logManager_.writeToLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
           publishLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
 
-          disableReverse();
+          logManager_.writeToLog("disableReverse");
+          publishLog("disableReverse");
 
           return true;
         }
@@ -1085,7 +1088,7 @@ public:
   }
 
   bool initialization()
-  {
+  { 
     int secondsIdle = 30;
 
     float mForward = 0.7;
@@ -1618,24 +1621,7 @@ public:
           // addd the infaltion by global cost-map
           addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_, convertPoseToPix(robotPose_));
 
-          // // marked waypoints near marked REJECTED goals
-          // for (int i = 0; i < rejectedGoals.size(); i++)
-          // {
-          //   for (int j = 0; j < grid_poses_with_status_.coveragePathPoses_.size(); j++)
-          //   {
-          //     if (grid_poses_with_status_.status_[j] == UN_COVERED)
-          //     {
-          //       auto wayPointPix = convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[j]);
-
-          //       float dist = goalCalculator.distanceCalculate(wayPointPix, rejectedGoals[i]);
-
-          //       if (dist < ((1.0 / mapResolution_) * (0.2)))
-          //       {
-          //         grid_poses_with_status_.setStatByIndex(j, REJECTED);
-          //       }
-          //     }
-          //   }
-          // }
+          
 
           auto robotPix = convertPoseToPix(robotPose_);
 
@@ -1728,15 +1714,18 @@ public:
               }
 
               // a goal can be sent and there will be no need to reverse
+              logManager_.writeToLog("sending goal to to this location, NO REVERSE");
+              publishLog("sending goal to to this location, NO REVERSE");
+
               bool result = sendGoal(nextGoalPose, -1, true);
 
               // goal of connected component failed, marks this area as obstacle in algo map
               if (!result)
               {
-                cerr << " failed to send goal connectecd compoennet " << endl;
                 logManager_.writeToLog("failed to send goal connectecd compoennet");
                 publishLog("failed to send goal connectecd compoennet");
 
+                grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
 
                 // rejectedGoals.push_back(finalGoalToNavigate);
               }
@@ -1857,6 +1846,9 @@ public:
             grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
             continue;
           }
+
+          logManager_.writeToLog("sending goal to to this location, NO REVERSE");
+          publishLog("sending goal to to this location, NO REVERSE");
 
           bool result = sendGoal(nextGoal, bestGoalIndexWaypoint);
 
@@ -3247,10 +3239,10 @@ private:
       m.type = visualization_msgs::Marker::SPHERE;
       m.pose.position.x = grid_poses_with_status_.coveragePathPoses_[i].pose.position.x;
       m.pose.position.y = grid_poses_with_status_.coveragePathPoses_[i].pose.position.y;
-      m.pose.position.z = 0;
+      m.pose.position.z = 0.0;
       m.pose.orientation.x = 0;
       m.pose.orientation.y = 0;
-      m.pose.orientation.z = -1.5;
+      m.pose.orientation.z = 0;
       m.pose.orientation.w = 1.0;
       m.scale.x = 0.1;
       m.scale.y = 0.1;
