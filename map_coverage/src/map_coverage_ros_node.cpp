@@ -276,7 +276,6 @@ public:
     image_transport::ImageTransport it(node_);
 
     liveMapPub_ = it.advertise("/live_map", 1);
-    node_.param("htjpeg_quality", 20);
 
     reverse_cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>("/cmd_vel", 1, false);
 
@@ -299,6 +298,9 @@ public:
     direction_or_component_goal_pub_ = node_.advertise<visualization_msgs::Marker>("/direction_component_goal", 10);
 
     uv_lamp_set_state_pub_ = node_.advertise<std_msgs::Bool>("/uv_lamp_set_state", 10);
+
+    log_pub_ = node_.advertise<std_msgs::String>("/sanitization_log", 10);
+
 
     initSlamMap_ = false;
 
@@ -351,13 +353,24 @@ public:
     if (state_ == "USER_CTRL_C")
     {
       logManager_.writeToLog("USER_CTRL_C");
+      publishLog("USER_CTRL_C");
+
       logManager_.closeFile();
     }
 
     if (state_ == "PERSON_DETECTED")
     {
       logManager_.writeToLog("PERSON_DETECTED");
+      publishLog("PERSON_DETECTED");
+
     }
+  }
+
+  void publishLog(string data){
+
+    std_msgs::String msg;
+    msg.data = data;
+    log_pub_.publish(msg);
   }
 
   bool explore()
@@ -438,6 +451,8 @@ public:
         //  try to find next exploration goal
         cerr << " try to find next exploration goal " << endl;
         logManager_.writeToLog("try to find next exploration goal");
+        publishLog("try to find next exploration goal");
+        
         goalCalculator.calcEdgesFrontiers(explorationImgMap, currentEdgesFrontiers, robotPix, mapResolution_,
                                           unreachedPointFromFronitiers);
 
@@ -469,27 +484,43 @@ public:
 
         if (resMakePlan)
         {
-          logManager_.writeToLog("trobot was able to make plan to the frontier goal");
+          logManager_.writeToLog("the obot was able to make plan to the frontier goal");
+          publishLog("the obot was able to make plan to the frontier goal");
 
-          bool reverseDone = reverseLogic(wanted_path, nextFrontierGoal);
 
-          logManager_.writeToLog("the reverse (backward to the safe goal) was down");
-          cerr << " reverseDone " << reverseDone << endl;
+          bool reverseDone = reverseLogic(wanted_path, nextFrontierGoal);         
 
           // If the robot traveled in reverse mode,
           // it means that it did not travel to a frontier goal,
           // but to a safe point,
           // so in the next iteration it is necessary to recalculate
           if (reverseDone)
-          {
+          { 
+            logManager_.writeToLog("the reverse (backward to the safe goal) was down");
+            publishLog("the reverse (backward to the safe goal) was down");
+
+            cerr << " reverseDone " << reverseDone << endl;
+
             explore_state_ = NAV_TO_NEXT_FRONTIER;
             break;
-          }
+
+          } else {
+
+            logManager_.writeToLog("exploration: no reverse was needed");
+            publishLog("exploration: no reverse was needed");
+
+
+          } 
         }
         else
         {
           cerr << " failed to calaculate path to this goal " << endl;
-          logManager_.writeToLog("failed to calaculate path to this frontier goal");
+          logManager_.writeToLog("failed to calaculate path to this frontier goal: "+
+             to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
+
+          publishLog("failed to calaculate path to this frontier goal: "+
+             to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
+   
 
           unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
           explore_state_ = NAV_TO_NEXT_FRONTIER;
@@ -498,7 +529,11 @@ public:
 
         // the robot was able to calculate path to this goal witout reverse logic
         cerr << " sending goal to the next froniter pix " << currentEdgesFrontiers[0].center << endl;
-        logManager_.writeToLog("ending goal to the next froniter pix");
+        logManager_.writeToLog("sending goal to the next froniter pix: " 
+          + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
+        publishLog("sending goal to the next froniter pix: " 
+          + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
+  
 
         bool result = sendGoal(nextFrontierGoal, -1, true);
 
@@ -506,6 +541,7 @@ public:
         {
           cerr << " failed to reach exploration goal " << endl;
           logManager_.writeToLog("failed to reach exploration goal, push to black list");
+          publishLog("failed to reach exploration goal, push to black list");
 
           unreachedPointFromFronitiers.push_back(currentEdgesFrontiers[0].center);
         }
@@ -525,6 +561,8 @@ public:
               cerr << " CAN'T ROTATE TO THE TARGET !! " << endl;
 
               logManager_.writeToLog("cant rotate to the goal, make small reverese");
+              publishLog("cant rotate to the goal, make small reverese");
+
 
               smallReverseAllowed_ = true;
 
@@ -549,6 +587,8 @@ public:
         saveCoverageImg();
 
         logManager_.writeToLog("ERROR_EXPLORE");
+        publishLog("ERROR_EXPLORE");
+
 
         cerr << "ERROR_EXPLORE " << endl;
         break;
@@ -681,6 +721,8 @@ public:
     {
       cerr << " path backward to small !" << endl;
       logManager_.writeToLog("path backward to small !");
+      publishLog("path backward to small !");
+
 
       return false; /// TO-DO -> THIS IS ERROR, NEED TO UNDERSTAND
     }
@@ -706,6 +748,8 @@ public:
     {
       cerr << " the path is behind the robot !! " << endl;
       logManager_.writeToLog("the path is behind the robot !!");
+      publishLog("the path is behind the robot !!");
+
 
       cv::Mat safetyMap;
       if (!getSafetyMap(safetyMap) || !safetyMap.data)
@@ -723,6 +767,8 @@ public:
       {
         cerr << " cant rotate-in place !! enable reverse !! " << endl;
         logManager_.writeToLog("cant rotate-in place !! enable reverse !!");
+        publishLog("cant rotate-in place !! enable reverse !!");
+
 
         /// find on the last forward path goal that the robot can rotate
 
@@ -756,7 +802,11 @@ public:
 
             cerr << " found reverse goal !! " << reverseGoal.pose.position.x << ", " << reverseGoal.pose.position.y
                  << endl;
-            logManager_.writeToLog("found reverse goal !!");
+            logManager_.writeToLog("found reverse goal : " + to_string(reverseGoal.pose.position.x)+","
+              + to_string(reverseGoal.pose.position.y));
+            publishLog("found reverse goal : " + to_string(reverseGoal.pose.position.x)+","
+              + to_string(reverseGoal.pose.position.y));
+
 
             foundReverseGoal = true;
 
@@ -789,6 +839,8 @@ public:
 
             cerr << "send the reverse goal !!!!!" << endl;
             logManager_.writeToLog("send the reverse goal");  
+            publishLog("send the reverse goal");  
+
             // seng goal backward direction
             bool result = sendGoal(reverseGoal, -1, false, false, true);
 
@@ -798,6 +850,11 @@ public:
               logManager_.writeToLog("reverse goal "+
                  to_string(reverseGoal.pose.position.x) + "," + to_string(reverseGoal.pose.position.y)
               + "reached !!! disable reverse");
+
+              publishLog("reverse goal "+
+                 to_string(reverseGoal.pose.position.x) + "," + to_string(reverseGoal.pose.position.y)
+              + "reached !!! disable reverse");
+
 
               safe360Poses_.push_back(reverseGoal);
 
@@ -809,7 +866,17 @@ public:
             else
             {
               cerr << "reverse goal failed !!! disable reverse " << endl;
-              logManager_.writeToLog("EDGE_CASE_1: reverse goal failed !!! disable reverse");
+              logManager_.writeToLog("EDGE_CASE_1: reverse goal failed !!! send the robot to starting location");
+              publishLog("EDGE_CASE_1: reverse goal failed !!! send the robot to starting location");
+
+              bool result = sendGoal(startingLocation_, -1, true);
+
+              if( !result){
+                
+                logManager_.writeToLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
+                publishLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
+              }             
+
 
               disableReverse();
               return true;
@@ -824,6 +891,10 @@ public:
           cerr << " didnt found safe goal to rotate, going back in reverse to starting location " << endl;
           logManager_.writeToLog(
               "EDGE_CASE_2: didnt found safe goal to rotate, going back in reverse to starting location");
+          publishLog(
+              "EDGE_CASE_2: didnt found safe goal to rotate, going back in reverse to starting location");
+
+
 
           setReverse();
 
@@ -855,6 +926,7 @@ public:
           cerr << " status back to starting location in reverse: " << result << endl;
 
           logManager_.writeToLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
+          publishLog("EDGE_CASE_3: status back to starting location in reverse " + to_string(result));
 
           disableReverse();
 
@@ -866,8 +938,9 @@ public:
     }
     else
     {
-      cerr << " the path in-front of the robot" << endl;
       logManager_.writeToLog("the path in-front of the robot");
+      publishLog("the path in-front of the robot");
+
 
       return false;
     }
@@ -918,6 +991,7 @@ public:
     {
       cerr << " the robot is very close to the starting location, so it probably can rotate" << endl;
       logManager_.writeToLog("the robot is very close to the starting location, so it probably can rotate");
+      publishLog("the robot is very close to the starting location, so it probably can rotate");
 
       return true;
     }
@@ -992,9 +1066,7 @@ public:
 
           cv::resize(dbg, dbg, cv::Size(dbg.cols * 4, dbg.rows * 4));
 
-          cv::imwrite("/var/lib/nimbus/records/last_collision.png", dbg);
-
-          logManager_.writeToLog("found collison!");
+          // logManager_.writeToLog("found collison!");
 
           return false;
         }
@@ -1058,6 +1130,8 @@ public:
     // Robot starts the initialization phase
     cerr << " Robot starts the initialization phase " << endl;
     logManager_.writeToLog("Robot starts the initialization phase");
+    publishLog("Robot starts the initialization phase");
+
 
     node_.setParam("/coverage/state", "INITIALIZATION");
     state_ = "INITIALIZATION";
@@ -1068,6 +1142,8 @@ public:
     {
       setState("USER_CTRL_C");
       logManager_.writeToLog("USER_CTRL_C");
+      publishLog("USER_CTRL_C");
+
 
       saveCoverageImg();
       return false;
@@ -1078,6 +1154,8 @@ public:
       saveCoverageImg();
       setState("PERSON_DETECTED");
       logManager_.writeToLog("PERSON_DETECTED");
+      publishLog("PERSON_DETECTED");
+
 
       return false;
     }
@@ -1121,6 +1199,8 @@ public:
 
     cerr << " calculate " << mForward << " m goal " << endl;
     logManager_.writeToLog(" calculate 0.7 m goal ");
+    publishLog(" calculate 0.7 m goal ");
+
 
     // convert pix to pose
     auto q = tf::createQuaternionMsgFromYaw(robotHeading);
@@ -1163,6 +1243,8 @@ public:
       {
         cerr << " failed to reach " << mForward << " meter goal , too far " << endl;
         logManager_.writeToLog(" failed to reach 0.7 m goal ");
+        publishLog(" failed to reach 0.7 m goal ");
+
 
         return false;
       }
@@ -1183,6 +1265,8 @@ public:
       {
         cerr << " robot is eable to rotate in place " << endl;
         logManager_.writeToLog("robot is eable to rotate in place ");
+        publishLog("robot is eable to rotate in place ");
+
 
         // rotate the robot in-place numOfRounds times
         if (!rotateInPlace(numOfRounds)) //
@@ -1190,12 +1274,15 @@ public:
           saveCoverageImg();
           setState("PERSON_DETECTED");
           logManager_.writeToLog("PERSON_DETECTED");
-          cerr << " person detectd !!! " << endl;
+          publishLog("PERSON_DETECTED");
+
           return false;
         }
 
         cerr << " finish rotate-in-place, turn on the lamp" << endl;
         logManager_.writeToLog(" finished rotate-in-place, turn on the lamp ");
+        publishLog(" finished rotate-in-place, turn on the lamp ");
+
 
         // turns on the lamp
         turnOnLamp();
@@ -1224,6 +1311,8 @@ public:
             saveCoverageImg();
             setState("PERSON_DETECTED");
             logManager_.writeToLog("PERSON_DETECTED");
+            publishLog("PERSON_DETECTED");
+
 
             return false;
           }
@@ -1294,6 +1383,8 @@ public:
 
           cerr << " found other safe goal, send goal there " << endl;
           logManager_.writeToLog("found other safe goal, send goal there");
+          publishLog("found other safe goal, send goal there");
+
 
           // create goal (pose )
           auto q = tf::createQuaternionMsgFromYaw(robotHeading);
@@ -1338,6 +1429,8 @@ public:
               cerr << " the robot failed to reach the safe goal !! "
                    << " trial : " << trial << endl;
               logManager_.writeToLog("the robot failed to reach the safe goal !! trial" + to_string(trial));
+              publishLog("the robot failed to reach the safe goal !! trial" + to_string(trial));
+
 
               return false;
             }
@@ -1346,6 +1439,8 @@ public:
           // goal reached, check if can rotate in place
           cerr << "safe goal reached, check if can rotate in place " << endl;
           logManager_.writeToLog("safe goal reached, check if can rotate in place");
+          publishLog("safe goal reached, check if can rotate in place");
+
 
           bool canRotateInPlace = checkIFsafeToRotate(safetyMap, robotPose_, robot_w_m_, robot_h_m_, 0, 0.12);
 
@@ -1353,12 +1448,16 @@ public:
           {
             cerr << " the robot is able to rotate in the safe goal " << endl;
             logManager_.writeToLog("the robot is able to rotate in the safe goal");
+            publishLog("the robot is able to rotate in the safe goal");
+
 
             // rotate the robot in-place numOfRounds times
             if (!rotateInPlace(numOfRounds))
             {
               cerr << " person detectd !!! " << endl;
               logManager_.writeToLog(" person detectd !!!");
+              publishLog(" person detectd !!!");
+
 
               turnOffLamp();
               saveCoverageImg();
@@ -1371,6 +1470,8 @@ public:
 
             cerr << " finished rotate-in-place, turn on the lamp" << endl;
             logManager_.writeToLog("finished rotate-in-place, turn on the lamp");
+            publishLog("finished rotate-in-place, turn on the lamp");
+
 
             // TURN-N THE LIGHT
             turnOnLamp();
@@ -1384,6 +1485,8 @@ public:
             cerr << " the robot cant rotate in this safe goal "
                  << " trial : " << trial << endl;
             logManager_.writeToLog("the robot cant rotate in this safe goal, trial " + to_string(trial));
+            publishLog("the robot cant rotate in this safe goal, trial " + to_string(trial));
+
 
             continue;
           }
@@ -1439,6 +1542,8 @@ public:
       {
         cerr << "COVERAGE_BY_STRAIGHT_LINES " << endl;
         logManager_.writeToLog("COVERAGE_BY_STRAIGHT_LINES");
+        publishLog("COVERAGE_BY_STRAIGHT_LINES");
+
 
         //   clearAllCostMaps();
 
@@ -1476,12 +1581,14 @@ public:
              << pathGrid.size() << endl;
         logManager_.writeToLog("num of coverage waypoints " +
                                to_string(grid_poses_with_status_.coveragePathPoses_.size()));
-
+        publishLog("num of coverage waypoints " +
+                               to_string(grid_poses_with_status_.coveragePathPoses_.size()));
+        
         bool coverage_done = false;
         float coveragePer = 0.0;
 
-        vector<cv::Point2d> rejectedGoals;
-        cerr << " Marks all the waypoints that the robot has already visited during EXPLORATION " << endl;
+        // vector<cv::Point2d> rejectedGoals;
+        // cerr << " Marks all the waypoints that the robot has already visited during EXPLORATION " << endl;
         // Marks all the waypoints that the robot has already visited during EXPLORATION
         markedWayPointsByExploration();
 
@@ -1511,24 +1618,24 @@ public:
           // addd the infaltion by global cost-map
           addDilationByGlobalCostMap(costMapImg_, currentAlgoMap_, convertPoseToPix(robotPose_));
 
-          // marked waypoints near marked REJECTED goals
-          for (int i = 0; i < rejectedGoals.size(); i++)
-          {
-            for (int j = 0; j < grid_poses_with_status_.coveragePathPoses_.size(); j++)
-            {
-              if (grid_poses_with_status_.status_[j] == UN_COVERED)
-              {
-                auto wayPointPix = convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[j]);
+          // // marked waypoints near marked REJECTED goals
+          // for (int i = 0; i < rejectedGoals.size(); i++)
+          // {
+          //   for (int j = 0; j < grid_poses_with_status_.coveragePathPoses_.size(); j++)
+          //   {
+          //     if (grid_poses_with_status_.status_[j] == UN_COVERED)
+          //     {
+          //       auto wayPointPix = convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[j]);
 
-                float dist = goalCalculator.distanceCalculate(wayPointPix, rejectedGoals[i]);
+          //       float dist = goalCalculator.distanceCalculate(wayPointPix, rejectedGoals[i]);
 
-                if (dist < ((1.0 / mapResolution_) * (0.2)))
-                {
-                  grid_poses_with_status_.setStatByIndex(j, REJECTED);
-                }
-              }
-            }
-          }
+          //       if (dist < ((1.0 / mapResolution_) * (0.2)))
+          //       {
+          //         grid_poses_with_status_.setStatByIndex(j, REJECTED);
+          //       }
+          //     }
+          //   }
+          // }
 
           auto robotPix = convertPoseToPix(robotPose_);
 
@@ -1537,52 +1644,49 @@ public:
                                      (1.0 - 2.0 * (robotPose_.pose.orientation.y * robotPose_.pose.orientation.y +
                                                    robotPose_.pose.orientation.z * robotPose_.pose.orientation.z)));
 
-          cv::Point2d finalGoalToNavigate;
+          cv::Point2d nextGoalPix;
           int bestGoalIndexWaypoint;
 
           // find next goal by 8 directions algo
           auto foundGoalByDirection =
-              findNextGoalByDirection(finalGoalToNavigate, &bestGoalIndexWaypoint, robotPix, robot_w_m_,
+              findNextGoalByDirection(nextGoalPix, &bestGoalIndexWaypoint, robotPix, robot_w_m_,
                                       mapResolution_, robotHeading, currentAlgoMap_);
 
-          if (!foundGoalByDirection) // find next goal by connected-components algo
+          // find next goal by connected-components algo
+          if (!foundGoalByDirection) 
           {
             cerr << " try to finld goal by findNextGoalByConnetctedComponents ... " << endl;
             logManager_.writeToLog("try to finld goal by findNextGoalByConnetctedComponents ... ");
+            publishLog("try to finld goal by findNextGoalByConnetctedComponents ... ");
 
-            auto foundGoalByConnectedComponents = findNextGoalByConnetctedComponents(
-                finalGoalToNavigate, currentAlgoMap_, grid_poses_with_status_, distBetweenGoalsM_, mapResolution_);
+            geometry_msgs::PoseStamped nextGoalPose;
+
+            int wayPointIndexComponent = findNextGoalByConnetctedComponents(
+                nextGoalPose, currentAlgoMap_, grid_poses_with_status_, distBetweenGoalsM_, mapResolution_);
 
             // found goal by connected component algo
-            if (foundGoalByConnectedComponents)
+            if (wayPointIndexComponent != -1)
             {
               cerr << " found goal by connected component !!" << endl;
-              logManager_.writeToLog("found goal by connected component !!");
+              logManager_.writeToLog("found goal by connected component :" + to_string(nextGoalPose.pose.position.x) + 
+                " , " + to_string(nextGoalPose.pose.position.y));
+              
+              publishLog("found goal by connected component :" + to_string(nextGoalPose.pose.position.x) + 
+                " , " + to_string(nextGoalPose.pose.position.y));
 
-              /// calculate the goal
-              geometry_msgs::Quaternion q;
-              auto goalHeading = -1 * atan2(finalGoalToNavigate.y - robotPix.y, finalGoalToNavigate.x - robotPix.x);
-              tf2::Quaternion orientation;
-              orientation.setRPY(0, 0, -1 * goalHeading);
-              q.w = orientation.getW();
-              q.x = orientation.getX();
-              q.y = orientation.getY();
-              q.z = orientation.getZ();
-
-              auto nextGoal = convertPixToPose(finalGoalToNavigate, q);
 
               visualization_msgs::Marker marker_component_goal;
               marker_component_goal.header.frame_id = globalFrame_;
               marker_component_goal.header.stamp = ros::Time::now();
               marker_component_goal.id = 1234;
               marker_component_goal.type = visualization_msgs::Marker::SPHERE;
-              marker_component_goal.pose.position.x = nextGoal.pose.position.x;
-              marker_component_goal.pose.position.y = nextGoal.pose.position.y;
+              marker_component_goal.pose.position.x = nextGoalPose.pose.position.x;
+              marker_component_goal.pose.position.y = nextGoalPose.pose.position.y;
               marker_component_goal.pose.position.z = 0.5;
-              marker_component_goal.pose.orientation.x = nextGoal.pose.orientation.x;
-              marker_component_goal.pose.orientation.y = nextGoal.pose.orientation.y;
-              marker_component_goal.pose.orientation.z = nextGoal.pose.orientation.z;
-              marker_component_goal.pose.orientation.w = nextGoal.pose.orientation.w;
+              marker_component_goal.pose.orientation.x = nextGoalPose.pose.orientation.x;
+              marker_component_goal.pose.orientation.y = nextGoalPose.pose.orientation.y;
+              marker_component_goal.pose.orientation.z = nextGoalPose.pose.orientation.z;
+              marker_component_goal.pose.orientation.w = nextGoalPose.pose.orientation.w;
               marker_component_goal.scale.x = 0.3;
               marker_component_goal.scale.y = 0.3;
               marker_component_goal.scale.z = 0.3;
@@ -1595,41 +1699,46 @@ public:
 
               /// calculate wanted path
               nav_msgs::Path wanted_path;
-              bool resMakePlan = makePlan(wanted_path, robotPose_, nextGoal);
+              bool resMakePlan = makePlan(wanted_path, robotPose_, nextGoalPose);
               cerr << " resMakePlan " << resMakePlan << endl;
               if (resMakePlan)
               {
-                logManager_.writeToLog("trobot was able to make plan to the connected component goal");
+                logManager_.writeToLog("the robot was able to make plan to the connected component goal");
+                publishLog("the robot was able to make plan to the connected component goal");
 
-                bool reverseDone = reverseLogic(wanted_path, nextGoal);
 
-                logManager_.writeToLog("the reverse (backward to the safe goal) was down");
-                cerr << " reverseDone " << reverseDone << endl;
+
+                bool reverseDone = reverseLogic(wanted_path, nextGoalPose);
 
                 if (reverseDone)
-                {
+                { 
+                  logManager_.writeToLog("the reverse (backward to the safe goal) was down");
+                  publishLog("the reverse (backward to the safe goal) was down");
+
+
                   continue;
                 }
               }
               else
               {
                 logManager_.writeToLog("failed to make plan fo connectecd compoennet goal, mark it");
-
-                cerr << " failed to make plan fo connectecd compoennet goal, mark it " << endl;
-                rejectedGoals.push_back(finalGoalToNavigate);
+                publishLog("failed to make plan fo connectecd compoennet goal, mark it");
+                grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
                 continue;
               }
 
               // a goal can be sent and there will be no need to reverse
-              bool result = sendGoal(nextGoal, -1, true);
+              bool result = sendGoal(nextGoalPose, -1, true);
 
               // goal of connected component failed, marks this area as obstacle in algo map
               if (!result)
               {
                 cerr << " failed to send goal connectecd compoennet " << endl;
                 logManager_.writeToLog("failed to send goal connectecd compoennet");
+                publishLog("failed to send goal connectecd compoennet");
 
-                rejectedGoals.push_back(finalGoalToNavigate);
+
+                // rejectedGoals.push_back(finalGoalToNavigate);
               }
 
               // if the robot in farward mode, was able to make plan, but goal aborted
@@ -1645,6 +1754,7 @@ public:
                   {
 
                     logManager_.writeToLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
+                    publishLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
 
                     smallReverseAllowed_ = true;
 
@@ -1661,6 +1771,8 @@ public:
             {
               cerr << " failed to find by connected components " << endl;
               logManager_.writeToLog("coverage_done: failed to find by connected components");
+              publishLog("coverage_done: failed to find by connected components");
+
 
               coverage_done = true;
               break;
@@ -1669,6 +1781,8 @@ public:
 
           cerr << " send the goal by direction only !!! " << endl;
           logManager_.writeToLog("send the goal by direction only !!!");
+          publishLog("send the goal by direction only !!!");
+
 
           // send the goal by direction only !!!
           percentCoverage_ = getCurrentPercentCoverage();
@@ -1676,7 +1790,7 @@ public:
 
           /// calculate the goal !!
           geometry_msgs::Quaternion q;
-          auto goalHeading = -1 * atan2(finalGoalToNavigate.y - robotPix.y, finalGoalToNavigate.x - robotPix.x);
+          auto goalHeading = -1 * atan2(nextGoalPix.y - robotPix.y, nextGoalPix.x - robotPix.x);
           tf2::Quaternion orientation;
           orientation.setRPY(0, 0, -1 * goalHeading);
           q.w = orientation.getW();
@@ -1684,7 +1798,7 @@ public:
           q.y = orientation.getY();
           q.z = orientation.getZ();
 
-          auto nextGoal = convertPixToPose(finalGoalToNavigate, q);
+          auto nextGoal = convertPixToPose(nextGoalPix, q);
 
           visualization_msgs::Marker marker_direction_goal;
           marker_direction_goal.header.frame_id = globalFrame_;
@@ -1715,14 +1829,20 @@ public:
           if (resMakePlan)
           {
             logManager_.writeToLog("trobot was able to make plan to the direction-goal");
+            publishLog("trobot was able to make plan to the direction-goal");
+
 
             bool reverseDone = reverseLogic(wanted_path, nextGoal);
-            logManager_.writeToLog("the reverse (backward to the safe goal) was down");
-
-            cerr << " reverseDone " << reverseDone << endl;
 
             if (reverseDone)
             {
+
+              logManager_.writeToLog("the reverse (backward to the safe goal) was down");
+              publishLog("the reverse (backward to the safe goal) was down");
+
+
+              cerr << " reverseDone " << reverseDone << endl;
+
               continue;
             }
           }
@@ -1730,6 +1850,8 @@ public:
           {
             // dont send the goal beacsue plan no valid!!
             logManager_.writeToLog(" failed to make plan for direction goal, mark it");
+            publishLog(" failed to make plan for direction goal, mark it");
+
 
             cerr << " failed to make plan for direction goal, mark it " << endl;
             grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
@@ -1750,6 +1872,7 @@ public:
               if (!canRotateInPlace)
               {
                 logManager_.writeToLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
+                publishLog("the robot was able to make plan but failed to reach goal and cant canRotateInPlace, make small reverse");
 
                 smallReverseAllowed_ = true;
                 makeSmallReverse();
@@ -1771,6 +1894,8 @@ public:
         cerr << " BACK_TO_STARTING_LOCATION : " << startingLocation_ << " : " << countNumberOfTriesFinsihGoal << endl;
 
         logManager_.writeToLog("BACK_TO_STARTING_LOCATION");
+        publishLog("BACK_TO_STARTING_LOCATION");
+
 
         if (countNumberOfTriesFinsihGoal > 3)
         {
@@ -2665,6 +2790,8 @@ private:
 
     cerr << "maxScore " << maxScore << endl;
     logManager_.writeToLog("maxScore" + to_string(maxScore));
+    publishLog("maxScore" + to_string(maxScore));
+
 
     if (maxScore > score_threshold)
     {
@@ -2675,7 +2802,7 @@ private:
     return false;
   }
 
-  bool findSafestGoalFromUncoveredGoals(cv::Point2d &nextGoal, const cv::Mat &imgMap,
+  int findSafestGoalFromUncoveredGoals(geometry_msgs::PoseStamped &nextGoalPose, const cv::Mat &imgMap,
                                         const Path_with_Status &waypointsWithStatus, float goals_m_resolution,
                                         float map_resolution, float miAreaForComponentM = 0.2)
   {
@@ -2697,7 +2824,7 @@ private:
 
     if (contours.size() == 0)
     {
-      return false;
+      return -1;
     }
 
     auto robotPix = convertPoseToPix(robotPose_);
@@ -2735,7 +2862,7 @@ private:
 
     if (index == -1)
     {
-      return false;
+      return -1;
     }
 
     try
@@ -2756,13 +2883,61 @@ private:
       if (!(maxLoc.x > 0 && maxLoc.y > 0))
       {
         cerr << " failed to find safe goal";
-        return false;
+        return -1;
       }
       else
       {
-        nextGoal = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
-        cerr << " found " << nextGoal << endl;
-        return true;
+        // this is the center of component (pix values)
+        auto nextGoalPix = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
+          geometry_msgs::Quaternion qT;
+
+        // convert it to real pose        
+        qT.w = 1;
+        nextGoalPose = convertPixToPose(nextGoalPix, qT);
+
+        // find from the UN_COVERED waypoints  the closest goal to this goal
+        int minDistIndex = -1;
+        float minDisWaypoint = 9999.9;
+        for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
+        {
+          if (grid_poses_with_status_.status_[i] == UN_COVERED)
+          { 
+            float distFromWaypoint = 
+            goalCalculator.distanceCalculate(
+                  cv::Point2d(grid_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                              grid_poses_with_status_.coveragePathPoses_[i].pose.position.y),
+                  cv::Point2d(nextGoalPose.pose.position.x,
+                              nextGoalPose.pose.position.y));
+            if ( distFromWaypoint < minDisWaypoint)
+            {
+              minDisWaypoint = distFromWaypoint;
+              minDistIndex = i;
+            }
+          }          
+        }
+
+        //edge case- no available waypoints
+        if ( minDistIndex == -1){
+          
+          return -1;
+        }
+
+        ///update the goal set the orientation to the goal
+        auto robotPix = convertPoseToPix(robotPose_);
+
+        nextGoalPose.header.frame_id = globalFrame_;
+        nextGoalPose.pose = grid_poses_with_status_.coveragePathPoses_[minDistIndex].pose;   
+
+        geometry_msgs::Quaternion q;
+        auto goalHeading = -1 * atan2(nextGoalPix.y - robotPix.y, nextGoalPix.x - robotPix.x);
+        tf2::Quaternion orientation;
+        orientation.setRPY(0, 0, -1 * goalHeading);
+        nextGoalPose.pose.orientation.w = orientation.getW();
+        nextGoalPose.pose.orientation.x = orientation.getX();
+        nextGoalPose.pose.orientation.y = orientation.getY();
+        nextGoalPose.pose.orientation.z = orientation.getZ();
+       
+        return minDistIndex;
       }
     }
     catch (cv::Exception &e)
@@ -2770,25 +2945,20 @@ private:
       const char *err_msg = e.what();
       std::cerr << "exception caught: " << err_msg << std::endl;
 
-      return false;
+      return -1;
     }
 
-    return false;
+    return -1;
   }
 
-  bool findNextGoalByConnetctedComponents(cv::Point2d &finalGoalToNavigate, const Mat &imgMap,
+  int findNextGoalByConnetctedComponents(geometry_msgs::PoseStamped &nextGoalPose, const Mat &imgMap,
                                           const Path_with_Status &waypointsWithStatus, float goals_m_resolution,
                                           float mapResolution_)
   {
-    if (findSafestGoalFromUncoveredGoals(finalGoalToNavigate, imgMap, waypointsWithStatus, goals_m_resolution,
-                                         mapResolution_))
-    {
-      return true;
-    }
-    else
-    {
-      return false;
-    }
+    int wayPointIndex = 
+    findSafestGoalFromUncoveredGoals(nextGoalPose, imgMap, waypointsWithStatus, goals_m_resolution,
+                                         mapResolution_);
+    return wayPointIndex;
   }
 
   geometry_msgs::PointStamped transformFrames(Point3d objectPoint3d, string target_frame, string source_Frame,
@@ -3080,7 +3250,7 @@ private:
       m.pose.position.z = 0;
       m.pose.orientation.x = 0;
       m.pose.orientation.y = 0;
-      m.pose.orientation.z = -0.5;
+      m.pose.orientation.z = -1.5;
       m.pose.orientation.w = 1.0;
       m.scale.x = 0.1;
       m.scale.y = 0.1;
@@ -3746,7 +3916,9 @@ private:
     if (!imgSaved_ && mappingMap_.data)
     {
 
-      logManager_.writeToLog("saveCoverageImg");
+      logManager_.writeToLog("save CoverageImg");
+      publishLog("save CoverageImg");
+
 
       Mat robotTreaceImg = mappingMap_.clone();
 
@@ -3834,7 +4006,7 @@ private:
 
       cv::imwrite(full_img_name, robotTreaceImg);
       // save to nimbus-cloud
-      cv::imwrite("/var/lib/nimbus/records/" + image_name_format + ".png", robotTreaceImg);
+      // cv::imwrite("/var/lib/nimbus/records/" + image_name_format + ".png", robotTreaceImg);
 
       imgSaved_ = true;
     }
@@ -3963,6 +4135,8 @@ private:
     cerr << " start to rotate " << numOfRounds << " rounds " << endl;
 
     logManager_.writeToLog("start to rotate  1 round");
+    publishLog("start to rotate  1 round");
+
 
     while (ros::ok())
     {
@@ -3972,6 +4146,8 @@ private:
       {
         setState("USER_CTRL_C");
         logManager_.writeToLog("USER_CTRL_C");
+        publishLog("USER_CTRL_C");
+
 
         return false;
       }
@@ -3980,7 +4156,10 @@ private:
       {
         turnOffLamp();
         setState("PERSON_DETECTED");
+        
         logManager_.writeToLog("rotateInPlace func: PERSON_DETECTED");
+        publishLog("rotateInPlace func: PERSON_DETECTED");
+
 
         return false;
       }
@@ -4108,6 +4287,8 @@ private:
   ros::Publisher waypoints_with_status_pub_;
 
   ros::Publisher directions_marker_array_pub_;
+
+  ros::Publisher log_pub_;
 
   ros::Publisher uv_lamp_set_state_pub_;
 
