@@ -484,8 +484,8 @@ public:
 
         if (resMakePlan)
         {
-          logManager_.writeToLog("the obot was able to make plan to the frontier goal");
-          publishLog("the obot was able to make plan to the frontier goal");
+          logManager_.writeToLog("the robot was able to make plan to the frontier goal");
+          publishLog("the robot was able to make plan to the frontier goal");
 
 
           bool reverseDone = reverseLogic(wanted_path, nextFrontierGoal);         
@@ -531,6 +531,7 @@ public:
         cerr << " sending goal NO REVERSE to the next froniter pix " << currentEdgesFrontiers[0].center << endl;
         logManager_.writeToLog("sending goal to the next froniter pix: " 
           + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
+        
         publishLog("sending goal NO REVERSE to the next froniter pix: " 
           + to_string(currentEdgesFrontiers[0].center.x) + "," + to_string(currentEdgesFrontiers[0].center.y));
   

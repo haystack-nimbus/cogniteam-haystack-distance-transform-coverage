@@ -365,9 +365,14 @@ public:
 
         }
         
+        
         for(int i = 0; i < unreachedPointFromFronitiers.size(); i++){
             
-            binarayImage.at<uchar>(unreachedPointFromFronitiers[i].y, unreachedPointFromFronitiers[i].x) = 0;
+            //binarayImage.at<uchar>(unreachedPointFromFronitiers[i].y, unreachedPointFromFronitiers[i].x) = 0;
+
+            circle(binarayImage, cv::Point(unreachedPointFromFronitiers[i].x, unreachedPointFromFronitiers[i].y), 
+                3, Scalar(0,0,0), -1, 8, 0); 
+
         }
        
         // imshow("binarayImage", binarayImage);
