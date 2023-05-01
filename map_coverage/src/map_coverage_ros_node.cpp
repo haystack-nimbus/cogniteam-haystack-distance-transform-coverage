@@ -676,7 +676,7 @@ public:
 
     auto startTime = ros::WallTime::now();
     // small rverse
-    ros::Rate rate(1);
+    ros::Rate rate(10);
     while (ros::ok())
     {
       cerr << " SMALL REEEEEEVERSE !!!!!!!!!! " << endl;
