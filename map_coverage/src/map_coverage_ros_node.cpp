@@ -254,7 +254,8 @@ public:
     logManager_.setLogPath(coverage_img_path_);
 
     // subs
-    global_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1, &MapCoverageManager::globalMapCallback, this);
+    global_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1, 
+      &MapCoverageManager::globalMapCallback, this);
 
     // subs
     global_cost_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
@@ -1090,7 +1091,7 @@ public:
 
   bool initialization()
   { 
-    int secondsIdle = 30;
+    int secondsIdle = 5;//30;
 
     float mForward = 0.7;
     startingTime_ = getCurrentTime();
@@ -1936,7 +1937,7 @@ public:
       }
       case COVERAGE_DONE:
       {
-        cerr << " COVERAGE_DONE " << endl;
+        //cerr << " COVERAGE_DONE " << endl;
 
         lampTimer_.stop();
 
@@ -2801,6 +2802,8 @@ private:
   {
     Mat binary = cv::Mat(imgMap.rows, imgMap.cols, CV_8UC1, cv::Scalar(0));
 
+
+
     float pixRes = goals_m_resolution / map_resolution;
     for (int i = 0; i < waypointsWithStatus.status_.size(); i++)
     {
@@ -2809,6 +2812,7 @@ private:
         circle(binary, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), pixRes, Scalar(255), -1, 8, 0);
       }
     }
+
 
     vector<vector<Point>> contours;
     vector<Vec4i> hierarchy;
@@ -2821,7 +2825,10 @@ private:
     }
 
     auto robotPix = convertPoseToPix(robotPose_);
+    logManager_.writeToLog("robotPix: "+to_string(robotPix.x)+", "+to_string(robotPix.y));
+    logManager_.writeToLog("mapResolution_: "+to_string(mapResolution_));
 
+  
     float maxArea = 0.0;
     int index = -1;
     float minDist = 99999.9;
@@ -2833,10 +2840,13 @@ private:
       float areaM = (r.width * map_resolution) * (r.height * map_resolution);
 
       Point center_of_rect = (r.br() + r.tl()) * 0.5;
+
       float dist = goalCalculator.distanceCalculate(center_of_rect, robotPix);
 
       if (areaM > miAreaForComponentM)
-      {
+      { 
+        logManager_.writeToLog("dist to contour " + to_string(i)+":"+to_string(dist));
+
         if (dist < minDist)
         {
           minDist = dist;
@@ -2853,15 +2863,22 @@ private:
       }
     }
 
+
+    logManager_.writeToLog("best index is  " + to_string(index));
+
     if (index == -1)
     {
+      logManager_.writeToLog("error with index -1");
+
       return -1;
     }
 
     try
     {
+      logManager_.writeToLog("calc distanceTransform ... ");
+
       cv::Rect r = cv::boundingRect(contours[index]);
-      cv::Mat cropped = binary(r);
+      cv::Mat cropped = binary(r).clone();
       Mat dist;
       cv::distanceTransform(cropped, dist, DIST_L2, 3);
       // Normalize the distance image for range = {0.0, 1.0}
@@ -2873,65 +2890,70 @@ private:
       cv::Point maxLoc;
       minMaxLoc(dist, &min, &max, &minLoc, &maxLoc);
 
+
       if (!(maxLoc.x > 0 && maxLoc.y > 0))
       {
         cerr << " failed to find safe goal";
+
         return -1;
       }
-      else
+
+      circle(dist, maxLoc,  10, Scalar(100), -1, 8, 0);
+
+
+      // this is the center of component (pix values)
+      auto nextGoalPix = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
+        geometry_msgs::Quaternion qT;
+
+      // convert it to real pose        
+      qT.w = 1;
+      nextGoalPose = convertPixToPose(nextGoalPix, qT);
+
+      // find from the UN_COVERED waypoints  the closest goal to this goal
+      int minDistIndex = -1;
+      float minDisWaypoint = 9999.9;
+      for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
       {
-        // this is the center of component (pix values)
-        auto nextGoalPix = cv::Point2d(maxLoc.x + r.x, maxLoc.y + r.y);
-          geometry_msgs::Quaternion qT;
-
-        // convert it to real pose        
-        qT.w = 1;
-        nextGoalPose = convertPixToPose(nextGoalPix, qT);
-
-        // find from the UN_COVERED waypoints  the closest goal to this goal
-        int minDistIndex = -1;
-        float minDisWaypoint = 9999.9;
-        for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
-        {
-          if (grid_poses_with_status_.status_[i] == UN_COVERED)
-          { 
-            float distFromWaypoint = 
-            goalCalculator.distanceCalculate(
-                  cv::Point2d(grid_poses_with_status_.coveragePathPoses_[i].pose.position.x,
-                              grid_poses_with_status_.coveragePathPoses_[i].pose.position.y),
-                  cv::Point2d(nextGoalPose.pose.position.x,
-                              nextGoalPose.pose.position.y));
-            if ( distFromWaypoint < minDisWaypoint)
-            {
-              minDisWaypoint = distFromWaypoint;
-              minDistIndex = i;
-            }
-          }          
-        }
-
-        //edge case- no available waypoints
-        if ( minDistIndex == -1){
-          
-          return -1;
-        }
-
-        ///update the goal set the orientation to the goal
-        auto robotPix = convertPoseToPix(robotPose_);
-
-        nextGoalPose.header.frame_id = globalFrame_;
-        nextGoalPose.pose = grid_poses_with_status_.coveragePathPoses_[minDistIndex].pose;   
-
-        geometry_msgs::Quaternion q;
-        auto goalHeading = -1 * atan2(nextGoalPix.y - robotPix.y, nextGoalPix.x - robotPix.x);
-        tf2::Quaternion orientation;
-        orientation.setRPY(0, 0, -1 * goalHeading);
-        nextGoalPose.pose.orientation.w = orientation.getW();
-        nextGoalPose.pose.orientation.x = orientation.getX();
-        nextGoalPose.pose.orientation.y = orientation.getY();
-        nextGoalPose.pose.orientation.z = orientation.getZ();
-       
-        return minDistIndex;
+        if (grid_poses_with_status_.status_[i] == UN_COVERED)
+        { 
+          float distFromWaypoint = 
+          goalCalculator.distanceCalculate(
+                cv::Point2d(grid_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                            grid_poses_with_status_.coveragePathPoses_[i].pose.position.y),
+                cv::Point2d(nextGoalPose.pose.position.x,
+                            nextGoalPose.pose.position.y));
+          if ( distFromWaypoint < minDisWaypoint)
+          {
+            minDisWaypoint = distFromWaypoint;
+            minDistIndex = i;
+          }
+        }          
       }
+
+      //edge case- no available waypoints
+      if ( minDistIndex == -1){
+        
+
+        return -1;
+      }
+
+      ///update the goal set the orientation to the goal
+      auto robotPix = convertPoseToPix(robotPose_);
+
+      nextGoalPose.header.frame_id = globalFrame_;
+      nextGoalPose.pose = grid_poses_with_status_.coveragePathPoses_[minDistIndex].pose;   
+
+      geometry_msgs::Quaternion q;
+      auto goalHeading = -1 * atan2(nextGoalPix.y - robotPix.y, nextGoalPix.x - robotPix.x);
+      tf2::Quaternion orientation;
+      orientation.setRPY(0, 0, -1 * goalHeading);
+      nextGoalPose.pose.orientation.w = orientation.getW();
+      nextGoalPose.pose.orientation.x = orientation.getX();
+      nextGoalPose.pose.orientation.y = orientation.getY();
+      nextGoalPose.pose.orientation.z = orientation.getZ();
+      
+      return minDistIndex;
+     
     }
     catch (cv::Exception &e)
     {
@@ -2940,6 +2962,7 @@ private:
 
       return -1;
     }
+
 
     return -1;
   }
