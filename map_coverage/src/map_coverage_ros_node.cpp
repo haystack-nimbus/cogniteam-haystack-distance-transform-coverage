@@ -1091,7 +1091,7 @@ public:
 
   bool initialization()
   { 
-    int secondsIdle = 5;//30;
+    int secondsIdle = 30;
 
     float mForward = 0.7;
     startingTime_ = getCurrentTime();
@@ -2843,19 +2843,11 @@ private:
 
       float dist = goalCalculator.distanceCalculate(center_of_rect, robotPix);
 
-      if (areaM > miAreaForComponentM)
+      if (areaM > miAreaForComponentM  && areaM > maxArea)
       { 
-        logManager_.writeToLog("dist to contour " + to_string(i)+":"+to_string(dist));
-
-        if (dist < minDist)
-        {
-          minDist = dist;
-          index = i;
-        }
-        else
-        {
-          drawContours(binary, contours, i, Scalar(0), -1);
-        }
+        maxArea = areaM;
+        index = i;
+        logManager_.writeToLog("areaM of  contour " + to_string(i)+":"+to_string(areaM));        
       }
       else
       {
@@ -2893,12 +2885,39 @@ private:
 
       if (!(maxLoc.x > 0 && maxLoc.y > 0))
       {
-        cerr << " failed to find safe goal";
+        logManager_.writeToLog("error with maxLoc: " +to_string(maxLoc.x) +","+to_string(maxLoc.y));
 
-        return -1;
+
+        bool foundWhitePix = false;
+        for (int y = r.y; y < r.y + r.height; y++)
+        {
+          for (int x = r.x; x < r.x + r.width; x++)
+          {
+            int value = binary.at<uchar>(y, x);
+            if (value == 255){
+              maxLoc.x = x;
+              maxLoc.y = y;
+              foundWhitePix = true;
+              break;
+            }
+          }
+
+          if (foundWhitePix){
+            logManager_.writeToLog("found white pix for with maxLoc: " +to_string(maxLoc.x) +","+to_string(maxLoc.y));
+
+            break;
+          }
+
+        }
+
+        if (!foundWhitePix){
+          logManager_.writeToLog("edge case, cant find even white pix for maxLoc");
+
+          return -1;
+        }
+
       }
 
-      circle(dist, maxLoc,  10, Scalar(100), -1, 8, 0);
 
 
       // this is the center of component (pix values)
