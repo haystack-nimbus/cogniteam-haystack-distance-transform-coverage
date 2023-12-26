@@ -1575,6 +1575,12 @@ public:
                                                                       distanceTransformImg, 1))
         {
           cerr << " failed to calcutate the distance transform img" << endl;
+          logManager_.writeToLog("failed to calcutate the distance transform img");
+          string image_name_format =
+            "ERROR_COVERAGE_"+startingTime_ + '_' + to_string(currentPosition.x) + '_' + to_string(currentPosition.y);
+          string full_img_name = coverage_img_path_ + image_name_format + ".png";
+          cv::imwrite(full_img_name, currentAlgoMap_);
+
           coverage_state_ = ERROR_COVERAGE;
           break;
         }
