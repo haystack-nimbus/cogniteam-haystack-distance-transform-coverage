@@ -233,8 +233,9 @@ public:
     nodePrivate.param("sanitization_radius", sanitization_radius_, 1.0);
     nodePrivate.param("path_deg_angle_threshold", path_deg_angle_threshold_, 100.0);
 
-    nodePrivate.param<string>("COVERED_BY_OBSTACLE_COLOR", COVERED_BY_OBSTACLE_COLOR, string("FF0000"));
+    nodePrivate.param<string>("COVERED_BY_OBSTACLE_COLOR", COVERED_BY_OBSTACLE_COLOR, string("808080"));
     nodePrivate.param<string>("COVERED_BY_ROBOT_PATH_COLOR", COVERED_BY_ROBOT_PATH_COLOR, string("0000FF"));
+    nodePrivate.param<string>("OBSTACLE_COVERED_BY_ROBOT_PATH_COLOR", OBSTACLE_COVERED_BY_ROBOT_PATH_COLOR, string("1B8510"));
     nodePrivate.param<string>("UN_COVERED_COLOR", UN_COVERED_COLOR, string("008000"));
     nodePrivate.param<string>("REJECTED_COLOR", REJECTED_COLOR, string("FFA500"));
 
@@ -254,8 +255,7 @@ public:
     logManager_.setLogPath(coverage_img_path_);
 
     // subs
-    global_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1, 
-      &MapCoverageManager::globalMapCallback, this);
+    global_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/map", 1, &MapCoverageManager::globalMapCallback, this);
 
     // subs
     global_cost_map_sub_ = node_.subscribe<nav_msgs::OccupancyGrid>("/move_base/global_costmap/costmap", 1,
@@ -673,7 +673,7 @@ public:
     }
 
     geometry_msgs::Twist velocity;
-    velocity.linear.x = -0.1;
+    velocity.linear.x = -0.08;
 
     auto startTime = ros::WallTime::now();
     // small rverse
@@ -1089,9 +1089,9 @@ public:
     return true;
   }
 
-  bool initialization()
+  bool initialization(int retry_init, int secondsIdle =30)
   { 
-    int secondsIdle = 30;
+   // int secondsIdle = 30;
 
     float mForward = 0.7;
     startingTime_ = getCurrentTime();
@@ -1114,7 +1114,7 @@ public:
 
         return false;
       }
-
+/*
       if (exitPerson_)
       {
         saveCoverageImg();
@@ -1122,7 +1122,7 @@ public:
         setState("PERSON_DETECTED");
         return false;
       }
-
+*/
       auto end = ros::WallTime::now();
 
       auto duration = (end - startTime).toSec();
@@ -1248,10 +1248,17 @@ public:
       {
         cerr << " failed to reach " << mForward << " meter goal , too far " << endl;
         logManager_.writeToLog(" failed to reach 0.7 m goal ");
-        publishLog(" failed to reach 0.7 m goal ");
+	publishLog(" failed to reach 0.7 m goal ");
+	if ( retry_init == 1){
+		system("rosnode kill /slam /move_base");
+		if (!initialization(0, 10)){
+			return false;
+		}
+	}
 
-
-        return false;
+	else{
+		return false;
+	}
       }
     }
 
@@ -1581,6 +1588,10 @@ public:
         grid_poses_with_status_.coveragePathPoses_ = covertPointsPathToPoseRout(pathGrid);
         grid_poses_with_status_.initStatusList();
 
+        overwrite_grid_poses_with_status_.setPixelsPath(pathGrid);
+        overwrite_grid_poses_with_status_.coveragePathPoses_ = covertPointsPathToPoseRout(pathGrid);
+        overwrite_grid_poses_with_status_.initStatusList();
+
         // exectute currnet navigation the blob-coverage
         cerr << "num of coverage waypoints " << grid_poses_with_status_.coveragePathPoses_.size() << " path_ size is "
              << pathGrid.size() << endl;
@@ -1712,6 +1723,7 @@ public:
                 logManager_.writeToLog("failed to make plan fo connectecd compoennet goal, mark it");
                 publishLog("failed to make plan fo connectecd compoennet goal, mark it");
                 grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
+                overwrite_grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
                 continue;
               }
 
@@ -1728,6 +1740,7 @@ public:
                 publishLog("failed to send goal connectecd compoennet");
 
                 grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
+                overwrite_grid_poses_with_status_.setStatByIndex(wayPointIndexComponent, REJECTED);
 
                 // rejectedGoals.push_back(finalGoalToNavigate);
               }
@@ -1846,6 +1859,7 @@ public:
 
             cerr << " failed to make plan for direction goal, mark it " << endl;
             grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
+            overwrite_grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
             continue;
           }
 
@@ -1877,6 +1891,7 @@ public:
           }
 
           grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
+          overwrite_grid_poses_with_status_.setStatByIndex(bestGoalIndexWaypoint, REJECTED);
         }
 
         coverage_state_ = BACK_TO_STARTING_LOCATION;
@@ -1937,7 +1952,7 @@ public:
       }
       case COVERAGE_DONE:
       {
-        //cerr << " COVERAGE_DONE " << endl;
+        cerr << " COVERAGE_DONE " << endl;
 
         lampTimer_.stop();
 
@@ -2095,6 +2110,15 @@ private:
     {
       for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
       {
+         if (goalCalculator.distanceCalculate(
+                cv::Point2d(robotHistoryPathMsg_.poses[j].pose.position.x,
+                            robotHistoryPathMsg_.poses[j].pose.position.y),
+                cv::Point2d(overwrite_grid_poses_with_status_.coveragePathPoses_[i].pose.position.x,
+                            overwrite_grid_poses_with_status_.coveragePathPoses_[i].pose.position.y)) <
+                            sanitization_radius_ + 1.0)
+        {
+          overwrite_grid_poses_with_status_.status_[i] = COVERED_BY_ROBOT_PATH;
+        }
         if (grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH ||
             grid_poses_with_status_.status_[i] == REJECTED)
         {
@@ -2109,6 +2133,7 @@ private:
         {
           grid_poses_with_status_.status_[i] = COVERED_BY_ROBOT_PATH;
         }
+
       }
     }
   }
@@ -2452,7 +2477,7 @@ private:
 
   void personsCallback(const std_msgs::Bool::ConstPtr &msg)
   {
-    if (msg->data == true)
+    if (msg->data == true && state_ != "IDLE")
     {
       detectedPerson_ = true;
     }
@@ -2802,8 +2827,6 @@ private:
   {
     Mat binary = cv::Mat(imgMap.rows, imgMap.cols, CV_8UC1, cv::Scalar(0));
 
-
-
     float pixRes = goals_m_resolution / map_resolution;
     for (int i = 0; i < waypointsWithStatus.status_.size(); i++)
     {
@@ -2812,7 +2835,6 @@ private:
         circle(binary, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), pixRes, Scalar(255), -1, 8, 0);
       }
     }
-
 
     vector<vector<Point>> contours;
     vector<Vec4i> hierarchy;
@@ -2828,7 +2850,6 @@ private:
     logManager_.writeToLog("robotPix: "+to_string(robotPix.x)+", "+to_string(robotPix.y));
     logManager_.writeToLog("mapResolution_: "+to_string(mapResolution_));
 
-  
     float maxArea = 0.0;
     int index = -1;
     float minDist = 99999.9;
@@ -2840,7 +2861,6 @@ private:
       float areaM = (r.width * map_resolution) * (r.height * map_resolution);
 
       Point center_of_rect = (r.br() + r.tl()) * 0.5;
-
       float dist = goalCalculator.distanceCalculate(center_of_rect, robotPix);
 
       if (areaM > miAreaForComponentM  && areaM > maxArea)
@@ -2881,7 +2901,6 @@ private:
       cv::Point minLoc;
       cv::Point maxLoc;
       minMaxLoc(dist, &min, &max, &minLoc, &maxLoc);
-
 
       if (!(maxLoc.x > 0 && maxLoc.y > 0))
       {
@@ -3127,6 +3146,12 @@ private:
         {
           // the goal inside the wanted radius
           grid_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+          if (overwrite_grid_poses_with_status_.status_[i] != REJECTED &&
+            overwrite_grid_poses_with_status_.status_[i] != COVERED_BY_ROBOT_PATH)
+          {
+          overwrite_grid_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+          }
+
 
           // circle(dbg, pOnImg,  1, Scalar(0,255,0), -1, 8, 0);
         }
@@ -3147,6 +3172,11 @@ private:
           {
             grid_poses_with_status_.setStatByIndex(i, UN_COVERED);
           }
+      if (overwrite_grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
+          {
+            overwrite_grid_poses_with_status_.setStatByIndex(i, COVERED_BY_OBSTACLE);
+          }
+          
         }
       }
 
@@ -3697,6 +3727,10 @@ private:
       {
         grid_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
       }
+      if (distRobotFromGoal < sanitization_radius_ + 1.0)
+      {
+        overwrite_grid_poses_with_status_.setStatByIndex(i, COVERED_BY_ROBOT_PATH);
+      }
     }
   }
 
@@ -3950,12 +3984,10 @@ private:
   {
     if (!imgSaved_ && mappingMap_.data)
     {
-
+      Mat robotTreaceImg = mappingMap_.clone();
+      int top = 0, bottom = mappingMap_.rows, left = mappingMap_.cols, right = 0;
       logManager_.writeToLog("save CoverageImg");
       publishLog("save CoverageImg");
-
-
-      Mat robotTreaceImg = mappingMap_.clone();
 
       cvtColor(robotTreaceImg, robotTreaceImg, COLOR_GRAY2BGR);
 
@@ -3968,6 +4000,18 @@ private:
 
           if (value == 0)
           {
+            if (i < left){
+            left = i;
+            }
+            if (j < bottom){
+            bottom = j;
+            }
+            if (j > top){
+            top = j;
+            }
+            if (i > right){
+            right = i;
+            }
             robotTreaceImg.at<cv::Vec3b>(j, i)[0] = 0;
             robotTreaceImg.at<cv::Vec3b>(j, i)[1] = 0;
             robotTreaceImg.at<cv::Vec3b>(j, i)[2] = 0;
@@ -3982,34 +4026,42 @@ private:
       }
 
       // draw the grid
-      for (int i = 0; i < grid_poses_with_status_.coveragePathPoses_.size(); i++)
+      for (int i = 0; i < overwrite_grid_poses_with_status_.coveragePathPoses_.size(); i++)
       {
-        if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
+        if (overwrite_grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE)
         {
           int r, g, b;
           sscanf(COVERED_BY_OBSTACLE_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+          circle(robotTreaceImg, convertPoseToPix(overwrite_grid_poses_with_status_.coveragePathPoses_[i]), 1,
                  Scalar(b, g, r) /*Scalar(0, 0, 255)*/, -1, 8, 0);
         }
-        else if (grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH)
+        else if (overwrite_grid_poses_with_status_.status_[i] == COVERED_BY_ROBOT_PATH)
         {
-          int r, g, b;
-          sscanf(COVERED_BY_ROBOT_PATH_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
-                 Scalar(b, g, r) /*Scalar(255, 0, 0)*/, -1, 8, 0);
+          if (grid_poses_with_status_.status_[i] == COVERED_BY_OBSTACLE){
+            int r, g, b;
+              sscanf(OBSTACLE_COVERED_BY_ROBOT_PATH_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
+              circle(robotTreaceImg, convertPoseToPix(overwrite_grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                     Scalar(b, g, r) /*Scalar(255, 0, 0)*/, -1, 8, 0);
+          }
+          else{
+              int r, g, b;
+              sscanf(COVERED_BY_ROBOT_PATH_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
+              circle(robotTreaceImg, convertPoseToPix(overwrite_grid_poses_with_status_.coveragePathPoses_[i]), 1,
+                     Scalar(b, g, r) /*Scalar(255, 0, 0)*/, -1, 8, 0);
+          }
         }
-        else if (grid_poses_with_status_.status_[i] == UN_COVERED)
+        else if (overwrite_grid_poses_with_status_.status_[i] == UN_COVERED)
         {
           int r, g, b;
           sscanf(UN_COVERED_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+          circle(robotTreaceImg, convertPoseToPix(overwrite_grid_poses_with_status_.coveragePathPoses_[i]), 1,
                  Scalar(b, g, r) /*Scalar(0, 255, 0)*/, -1, 8, 0);
         }
-        else if (grid_poses_with_status_.status_[i] == REJECTED)
+        else if (overwrite_grid_poses_with_status_.status_[i] == REJECTED)
         {
           int r, g, b;
           sscanf(REJECTED_COLOR.c_str(), "%02x%02x%02x", &r, &g, &b);
-          circle(robotTreaceImg, convertPoseToPix(grid_poses_with_status_.coveragePathPoses_[i]), 1,
+          circle(robotTreaceImg, convertPoseToPix(overwrite_grid_poses_with_status_.coveragePathPoses_[i]), 1,
                  Scalar(b, g, r) /*Scalar(0, 165, 255)*/, -1, 8, 0);
         }
       }
@@ -4025,6 +4077,7 @@ private:
           cv::line(robotTreaceImg, p1, p2, Scalar(0, 255, 255), 1);
         }
       }
+
       std::cerr << "222222" << std::endl;
       auto end = high_resolution_clock::now();
       auto durationCoverage = duration_cast<seconds>(end - startingCoverageTime_);
@@ -4035,14 +4088,51 @@ private:
       string image_name_format =
           startingTime_ + '_' + to_string(durationMinutes) + '_' + to_string(int(percentCoverage_));
       string full_img_name = coverage_img_path_ + image_name_format + ".png";
-      node_.setParam("/coverage/image_name", image_name_format);
+      
 
       cerr << "full_img_name: " << full_img_name << endl;
+//      cerr << left << " " << top<< " "  << right << " "  << bottom << endl;
+      if (top + 20 < mappingMap_.rows){
+      top = top + 20;
+      }
+      if (right + 20 < mappingMap_.cols){
+      right = right + 20;
+      }
+      if (left - 20 > 0){
+      left = left - 20;
+      }
+      if (bottom - 20 > 0){
+      bottom = bottom - 20;
+      }
+      int lower_diff, upper_diff;
+      lower_diff = right - left;
+      upper_diff = top - bottom;
+      if (lower_diff > upper_diff){
+          if ((top + ((lower_diff - upper_diff) / 2)) < mappingMap_.rows){
+          top += (lower_diff - upper_diff) / 2;
+          }
+          if ((bottom - ((lower_diff - upper_diff) / 2)) > 0){
+          bottom -= (lower_diff - upper_diff) / 2;
+          }
+          }
+      else{
+          if ((right + ((upper_diff - lower_diff) / 2)) < mappingMap_.cols){
+          right += (upper_diff - lower_diff) / 2;
+          }
+          if ((left - ((upper_diff - lower_diff) / 2)) > 0){
+          left -= (upper_diff - lower_diff) / 2;
+          }
 
+          }
+      cerr << left << " " << top<< " "  << right << " "  << bottom << endl;
+      cerr << mappingMap_.rows << " " << mappingMap_.cols << endl;
+      robotTreaceImg = robotTreaceImg(Range(bottom,top),Range(left,right));
+      cv::flip(robotTreaceImg, robotTreaceImg, 1);
+      cv::rotate(robotTreaceImg, robotTreaceImg, cv::ROTATE_90_CLOCKWISE);
       cv::imwrite(full_img_name, robotTreaceImg);
       // save to nimbus-cloud
       // cv::imwrite("/var/lib/nimbus/records/" + image_name_format + ".png", robotTreaceImg);
-
+      node_.setParam("/coverage/image_name", image_name_format);
       imgSaved_ = true;
     }
   }
@@ -4360,6 +4450,8 @@ private:
   cv::Mat currentAlgoMap_;
 
   Path_with_Status grid_poses_with_status_;
+  Path_with_Status overwrite_grid_poses_with_status_;
+
 
   // params
 
@@ -4461,6 +4553,7 @@ private:
 
   string COVERED_BY_OBSTACLE_COLOR;
   string COVERED_BY_ROBOT_PATH_COLOR;
+  string OBSTACLE_COVERED_BY_ROBOT_PATH_COLOR;
   string UN_COVERED_COLOR;
   string REJECTED_COLOR;
 };
@@ -4473,7 +4566,7 @@ int main(int argc, char **argv)
 
   signal(SIGINT, (void (*)(int))MapCoverageManager::mySigintHandler);
 
-  if (mapCoverageManager.initialization())
+  if (mapCoverageManager.initialization(1))
   {
     if (mapCoverageManager.explore())
     {

@@ -1,6 +1,6 @@
 <launch>   
 
-    <arg name="distance_between_goals_m" default="0.1" />  
+    <arg name="distance_between_goals_m" default="0.05" />  
     <arg name="walls_inflation_m" default="0.3" />  
     <arg name="robot_w_m" default="0.50" />  
     <arg name="robot_h_m" default="0.50" />  
@@ -9,10 +9,12 @@
 
     <arg name="path_deg_angle_threshold" default="30.0" />  
     
-    <arg name="COVERED_BY_OBSTACLE_COLOR" default="FF0000" />  
-    <arg name="COVERED_BY_ROBOT_PATH_COLOR" default="0000FF" />  
-    <arg name="UN_COVERED_COLOR" default="008000" /> 
-    <arg name="REJECTED_COLOR" default="FFA500" />  
+    
+    <arg name="COVERED_BY_OBSTACLE_COLOR" default="080808" />  
+    <arg name="COVERED_BY_ROBOT_PATH_COLOR" default="7CFC00" />  
+    <arg name="OBSTACLE_COVERED_BY_ROBOT_PATH_COLOR" default="1B8510" />
+    <arg name="UN_COVERED_COLOR" default="0000FF" />
+    <arg name="REJECTED_COLOR" default="00FF7F" />  
 
 
     
